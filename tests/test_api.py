@@ -1,0 +1,141 @@
+"""Public API validation and end-to-end scientific boundary checks."""
+
+import json
+import sys
+
+import numpy as np
+import pyarrow.parquet as pq
+import pytest
+
+from astro_crossmatch import (
+    DegenerateCrossmatchConfig,
+    EntitySelectionConfig,
+    EntitywiseCrossmatchConfig,
+    crossmatch,
+    survey_coords_from_arrays,
+)
+
+
+def survey(name, ids, offsets):
+    offsets = np.asarray(offsets, dtype=float)
+    return survey_coords_from_arrays(
+        name, np.asarray(ids), 180 + offsets / 3600, np.zeros(len(offsets))
+    )
+
+
+def resolve(surveys, *, mode=None, **kwargs):
+    return crossmatch(
+        surveys,
+        radius_arcsec=kwargs.pop("radius_arcsec", 1.0),
+        dedupe_radius_arcsec=kwargs.pop(
+            "dedupe_radius_arcsec", {item.name: 0.0 for item in surveys}
+        ),
+        mode=mode or EntitywiseCrossmatchConfig(),
+        **kwargs,
+    )
+
+
+def test_public_entity_index_preserves_large_ids_nulls_and_parquet(tmp_path):
+    big = 2**60 + 7
+    sources = [survey("a", [big, big + 1], [0, 20]), survey("b", [91], [0.2])]
+    result = resolve(sources, id_columns={"a": "object_id"})
+    records = result.table.to_pylist()
+    assert {tuple(row.values()) for row in records} == {
+        (big, 91, None),
+        (big + 1, None, None),
+    }
+    path = tmp_path / "index.parquet"
+    pq.write_table(result.table, path)
+    assert pq.read_table(path).equals(result.table, check_metadata=True)
+    provenance = json.loads(
+        result.table.schema.metadata[b"astro_crossmatch.resolved_config"]
+    )
+    assert provenance["surveys"][0]["id_column"] == "object_id"
+
+
+def test_public_dedupe_uses_stable_id_and_reports_outcome():
+    sources = [survey("a", [50, 40], [0, 0.1]), survey("b", [7], [0.05])]
+    result = resolve(sources, dedupe_radius_arcsec={"a": 0.2, "b": 0})
+    assert result.table["a/id"].to_pylist() == [40]
+    assert result.table["b/id"].to_pylist() == [7]
+    outcomes = json.loads(result.table.schema.metadata[b"astro_crossmatch.dedupe"])
+    assert outcomes["a"]["n_dropped"] == 1
+
+
+def test_pair_override_changes_dispute_classification():
+    sources = [survey("a", [1], [0]), survey("b", [2], [0.3]), survey("c", [3], [0.6])]
+    clean = resolve(sources)
+    assert len(clean.table) == 1
+    disputed = resolve(sources, pair_radius_overrides={("a", "c"): 0.1})
+    assert len(disputed.table) == 3
+    assert disputed.table["disputed_reason"].to_pylist() == ["ambiguous_component"] * 3
+
+
+def test_selection_does_not_hide_optional_survey_ambiguity():
+    sources = [
+        survey("a", [1], [0]),
+        survey("b", [2], [0.2]),
+        survey("c", [3, 4], [0.3, 0.4]),
+    ]
+    mode = EntitywiseCrossmatchConfig(
+        selection=EntitySelectionConfig(min_surveys=2, must_include_surveys=["a", "b"])
+    )
+    assert len(resolve(sources, mode=mode).table) == 0
+
+
+def test_subset_join_builds_only_selected_relations():
+    sources = [survey("a", [1], [0]), survey("b", [2], [0.2]), survey("c", [3], [20])]
+    result = resolve(sources, mode=DegenerateCrossmatchConfig(surveys=["a", "b"]))
+    assert result.table.column_names == ["a/id", "b/id", "a__b/separation_arcsec"]
+    assert result.table["a/id"].to_pylist() == [1]
+
+
+def test_empty_survey_is_valid_and_missing_members_stay_null():
+    sources = [survey("a", np.array([], dtype=np.int64), []), survey("b", [9], [0])]
+    result = resolve(sources)
+    assert result.table.to_pylist() == [
+        {"a/id": None, "b/id": 9, "disputed_reason": None}
+    ]
+
+
+@pytest.mark.parametrize("ids", [[1, 1], [None, 2], [float("nan"), 2]])
+def test_rejects_ambiguous_or_missing_ids(ids):
+    with pytest.raises(ValueError, match="IDs must"):
+        resolve([survey("a", ids, [0, 10])])
+
+
+@pytest.mark.parametrize(
+    "radii", [{}, {"a": -1}, {"a": float("nan")}, {"a": 0, "x": 0}]
+)
+def test_dedupe_choice_is_explicit_and_valid(radii):
+    with pytest.raises(ValueError, match="dedupe"):
+        resolve([survey("a", [1], [0])], dedupe_radius_arcsec=radii)
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {("a", "b"): 1, ("b", "a"): 1},
+        {("a", "z"): 1},
+        {("a", "a"): 1},
+        {("a", "b"): float("nan")},
+    ],
+)
+def test_invalid_pair_override_is_rejected(override):
+    sources = [survey("a", [1], [0]), survey("b", [2], [0])]
+    with pytest.raises(ValueError, match="override"):
+        resolve(sources, pair_radius_overrides=override)
+
+
+def test_unknown_mode_survey_is_rejected_before_matching():
+    with pytest.raises(ValueError, match="unknown surveys"):
+        resolve(
+            [survey("a", [1], [0])], mode=DegenerateCrossmatchConfig(surveys=["a", "b"])
+        )
+
+
+def test_no_upstream_or_storage_dependencies_are_imported():
+    assert not any(
+        name.startswith(("astral_projections", "aion2", "lsdb", "hats"))
+        for name in sys.modules
+    )
