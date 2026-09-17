@@ -289,3 +289,59 @@ def test_chunked_invalid_values_are_checked_across_chunk_boundaries(invalid, kin
 def test_python_integer_above_uint64_is_rejected_clearly():
     with pytest.raises(ValueError, match="fit one Arrow integer type"):
         match_uids({"a": [2**64]})
+
+
+def test_outer_late_source_matches_prior_non_anchor_keys_across_empty_source():
+    keys = {
+        "first": ["70", "10"],
+        "anchor": ["20", "10"],
+        "empty": [],
+        "last": ["70", "30", "20"],
+    }
+    ids = {
+        name: [f"{name}-{row}" for row in range(len(values))]
+        for name, values in keys.items()
+    }
+    result = match_uids(
+        {
+            name: pa.chunked_array([[], values[:1], [], values[1:]], pa.string())
+            for name, values in keys.items()
+        },
+        ids={name: pa.array(values, pa.string()) for name, values in ids.items()},
+        join="outer",
+        anchor="anchor",
+    )
+    assert result.to_pydict() == _reference_join(
+        keys, ids, join="outer", anchor="anchor"
+    )
+
+
+@pytest.mark.parametrize("last", [[7], []])
+def test_four_source_inner_successive_reductions_keep_original_observations(last):
+    keys = {"a": [9, 1, 7, 3], "b": [7, 1, 8], "c": [1, 7], "d": last}
+    ids = {
+        "a": [40, 10, 30, 20],
+        "b": [103, 101, 102],
+        "c": [202, 201],
+        "d": [301] if last else [],
+    }
+    result = match_uids(keys, ids=ids)
+    assert result.to_pydict() == _reference_join(keys, ids, join="inner", anchor="a")
+
+
+@pytest.mark.parametrize("join", ["inner", "left", "outer"])
+@pytest.mark.parametrize("values", [["z", "é", "a\0"], []])
+def test_single_source_chunked_keys_keep_order_and_separate_typed_ids(join, values):
+    identifiers = pa.array([2**64 - 1 - row for row in range(len(values))], pa.uint64())
+    result = match_uids(
+        {"only": pa.chunked_array([[], values[:1], [], values[1:]], pa.large_string())},
+        ids={"only": identifiers},
+        join=join,
+    )
+    expected = pa.table(
+        {
+            "entity_id": pa.array(range(len(values)), pa.int64()),
+            "only/id": identifiers,
+        }
+    )
+    assert result.equals(expected)

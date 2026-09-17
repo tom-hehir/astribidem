@@ -60,3 +60,54 @@ different numbers of sources, overlaps and key lengths can change the balance.
 Validation for the implementation change: 251 core tests and 186 downstream
 HF tests passed on PyArrow 25.0.1. All 75 UID tests also passed with Python 3.11,
 NumPy 1.26.4 and the minimum declared PyArrow version, 15.0.0.
+
+## `index_in` production update
+
+The production matcher now performs one `pc.index_in` lookup per non-anchor
+source and reuses the resulting row positions for membership and final output.
+It retains N-source inner/left/outer semantics, exact integer and string keys,
+and all validation. NumPy handles only integer row positions and an outer-join
+boolean bitmap. Normalized keys are released before final ID gathers; row maps
+are released as each output column is built.
+
+A before/after run on 2026-09-17 used the same fixtures and worker from
+`benchmark_uid_acero.py`, calling the production `current` strategy against
+`80aedb8` and the updated module. Each case used 500,000 rows/source, 50% overlap,
+one Arrow thread, and three fresh sequential warmed workers per implementation;
+implementation order alternated between repeats. Times include validation,
+normalization, matching and ordered typed output; every output was checked
+against the independent rank oracle outside timing.
+
+| Keys / join | Before | Updated | Before additional peak RSS | Updated additional peak RSS |
+| --- | ---: | ---: | ---: | ---: |
+| int64 / inner | 171.8 ms | 119.5 ms | 130.0 MB | 119.5 MB |
+| int64 / outer | 216.1 ms | 139.5 ms | 134.0 MB | 125.6 MB |
+| string / inner | 316.0 ms | 274.6 ms | 130.2 MB | 127.2 MB |
+| string / outer | 434.2 ms | 258.9 ms | 140.7 MB | 134.1 MB |
+
+Medians are shown. The updated matcher took 13–40% less time on these two-source
+workloads, with modest memory reductions. RSS has the high-water-mark limitations
+described above; this does not establish N-source performance or survey-scale
+capacity. [Raw results and module checksum](results/uid-index-in.json) preserve
+all 24 measurements and the environment (Python 3.13.5, NumPy 2.5.3,
+PyArrow 25.0.1, macOS arm64).
+
+For a before/after comparison using the existing benchmark suite:
+
+```sh
+git show 80aedb8:src/astro_crossmatch/uids.py > /tmp/uids-before.py
+python benchmarks/benchmark_uid_acero.py \
+  --module /tmp/uids-before.py --output /tmp/uids-before.json
+python benchmarks/benchmark_uid_acero.py \
+  --module src/astro_crossmatch/uids.py --output /tmp/uids-after.json
+```
+
+Compare the `strategy="current"` measurements in those files. The suite also
+runs the older two-source prototypes. To reproduce individual production workers
+or alternate before/after modules, use `--worker --strategy current --threads 1
+--rows 500000 --kind int64 --join inner`, varying key family and join as needed.
+
+Validation: 260 core tests and 186 downstream HF tests passed against the updated
+source. All 84 UID tests passed on minimum-supported PyArrow 15.0.0 as well.
+New regressions cover late-source matches to previously introduced outer keys,
+successive four-source inner reductions, and single-source chunked/empty inputs.

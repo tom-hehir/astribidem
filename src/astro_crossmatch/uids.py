@@ -74,15 +74,25 @@ def _common_key_type(keys: Mapping[str, pa.Array | pa.ChunkedArray]) -> pa.DataT
     return pa.large_string() if pa.large_string() in types else pa.string()
 
 
-def _append_keys(
+def _append_arrays(
     existing: pa.Array | pa.ChunkedArray, extra: pa.Array | pa.ChunkedArray
 ) -> pa.ChunkedArray:
-    """Append native buffers without copying the accumulated outer-join keys."""
+    """Append native buffers without copying accumulated keys or row positions."""
     existing_chunks = (
         existing.chunks if isinstance(existing, pa.ChunkedArray) else [existing]
     )
     extra_chunks = extra.chunks if isinstance(extra, pa.ChunkedArray) else [extra]
     return pa.chunked_array([*existing_chunks, *extra_chunks], type=existing.type)
+
+
+def _unmatched_rows(
+    matched: pa.Array | pa.ChunkedArray, source_length: int
+) -> pa.Array:
+    """Find unseen source rows using the existing lookup, without hashing again."""
+    unseen = np.ones(source_length, dtype=np.bool_)
+    # Only non-null integer row positions enter NumPy, never UID values.
+    unseen[pc.drop_null(matched).to_numpy(zero_copy_only=False)] = False
+    return pa.array(np.flatnonzero(unseen), type=matched.type)
 
 
 def match_uids(
@@ -157,25 +167,48 @@ def match_uids(
     key_type = _common_key_type(keys)
     comparable = {name: pc.cast(array, key_type) for name, array in keys.items()}
     ordered = comparable[anchor]
-    if join == "inner":
-        for name in names:
-            if name != anchor:
-                ordered = pc.filter(
-                    ordered, pc.is_in(ordered, value_set=comparable[name])
-                )
-    elif join == "outer":
-        for name in names:
-            if name == anchor:
-                continue
-            extra = pc.filter(
-                comparable[name],
-                pc.invert(pc.is_in(comparable[name], value_set=ordered)),
-            )
-            ordered = _append_keys(ordered, extra)
-    columns = {"entity_id": pa.array(np.arange(len(ordered), dtype=np.int64))}
+    row_maps = {anchor: pa.array(np.arange(len(ordered), dtype=np.int64))}
+    others = [name for name in names if name != anchor]
+    for index, name in enumerate(others):
+        # One lookup per non-anchor source supplies both membership and rows.
+        matched = pc.index_in(ordered, value_set=comparable[name])
+        more_sources = index + 1 < len(others)
+        if join == "inner":
+            keep = pc.is_valid(matched)
+            for source, rows in row_maps.items():
+                row_maps[source] = pc.filter(rows, keep)
+            del rows
+            matched = pc.filter(matched, keep)
+            if more_sources:
+                ordered = pc.filter(ordered, keep)
+            del keep
+        elif join == "outer":
+            extra_rows = _unmatched_rows(matched, len(comparable[name]))
+            if len(extra_rows):
+                if more_sources:
+                    ordered = _append_arrays(
+                        ordered, pc.take(comparable[name], extra_rows)
+                    )
+                # Share null padding across maps of the same integer width.
+                padding = {
+                    dtype: pa.nulls(len(extra_rows), type=dtype)
+                    for dtype in {rows.type for rows in row_maps.values()}
+                }
+                row_maps = {
+                    source: _append_arrays(rows, padding[rows.type])
+                    for source, rows in row_maps.items()
+                }
+                matched = _append_arrays(matched, extra_rows)
+                del padding
+            del extra_rows
+        row_maps[name] = matched
+        del matched
+
+    # Release normalized keys before gathering potentially large string IDs.
+    del comparable, ordered
+    columns = {"entity_id": pa.array(np.arange(len(row_maps[anchor]), dtype=np.int64))}
     for name in names:
-        rows = pc.index_in(ordered, value_set=comparable[name])
-        columns[f"{name}/id"] = pc.take(identifiers[name], rows)
+        columns[f"{name}/id"] = pc.take(identifiers[name], row_maps.pop(name))
     provenance = {
         "method": "exact_uid",
         "join": join,

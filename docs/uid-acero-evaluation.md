@@ -1,5 +1,11 @@
 # Direct Acero UID join experiment
 
+**Follow-up:** production now uses the optimized `index_in` approach generalized
+to N sources; see the [implementation decision](uid-matching.md) and
+[production measurements](../benchmarks/README.md).
+The experiment and its "Current" measurements below describe the earlier
+implementation at `80aedb8`, before that change.
+
 Evaluated 2026-09-17. Direct Acero works with our native integer/string and
 two-source matching semantics, but these measurements do not justify replacing
 the production matcher. Threaded joins win some cases; direct `index_in` wins

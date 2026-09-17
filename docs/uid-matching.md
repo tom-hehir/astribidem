@@ -37,9 +37,14 @@ support is distinct from the internal exact integer normalization above.
 
 ## Current implementation and threading
 
-`match_uids` uses Arrow `count_distinct`, `is_in`, `index_in`, `filter`, and
-`take`. `index_in` provides row positions in probe order, with null for a miss;
-the wrapper supplies our validation, ordering and N-source semantics.
+`match_uids` validates with Arrow `count_distinct` and performs one `index_in`
+lookup per non-anchor source. `index_in` provides row positions in probe order,
+with null for a miss. Inner joins filter the accumulated row maps; outer joins
+reuse matched positions to mark unseen source rows in a NumPy boolean bitmap.
+Only native integer row positions enter NumPy; integer/string keys remain in
+Arrow. The wrapper supplies validation, exact type normalization, deterministic
+ordering and N-source semantics. IDs are gathered once with `take`, releasing
+each row map as its output column is built.
 [`Table.join`](https://arrow.apache.org/docs/python/generated/pyarrow.Table.html#pyarrow.Table.join)
 is another canonical option, but would still need explicit duplicate rejection,
 lossless common key types and restoration of our output order.
@@ -58,7 +63,7 @@ concurrent independent builds. Threading can increase peak memory.
 
 | Approach | Assessment |
 | --- | --- |
-| Arrow `index_in` | Selected primitive. Native integer/string support with existing dependencies and direct row-index results. Repeated validation/membership/lookups can rebuild hash state. |
+| Arrow `index_in` | Selected primitive. Native integer/string support with existing dependencies and direct row-index results. One lookup per non-anchor source; reuse row maps rather than hashing again for membership and final output. Uniqueness validation remains a separate pass. |
 | Arrow `Table.join` | Canonical internally threaded alternative; modest gains in some tested cases, with ordering/validation costs. Consider if representative measurements justify a change. |
 | Direct Arrow Acero hash join | Same engine as `Table.join`, with explicit row-position-only output. Evaluated at 500k and 2m rows/source; no consistent overall improvement over lookup. See the [Acero evaluation](uid-acero-evaluation.md). |
 | NumPy sorting + `searchsorted` | Low-memory integer option using native numeric views. A shuffled 500k/source experiment took about 141 ms and 30 MB additional peak RSS. Ordinary Arrow strings have no equivalent simple zero-copy NumPy representation; this would require a separate string path. |
@@ -120,7 +125,8 @@ matcher, a lookup optimization, `Table.join`, and a public Acero plan that emits
 only row positions. It includes 500k and 2m rows/source, a reproducible prototype,
 and compatibility checks on PyArrow 15 and 25. Threaded Acero speeds up some
 joins but costs more memory at 2m; omitting key output provides no consistent
-overall advantage. Production remains unchanged.
+overall advantage. The experiment retained production at its historical
+baseline; the subsequent production update adopts the optimized lookup approach.
 
 ## When to revisit
 
@@ -130,8 +136,8 @@ including validation, casts, chunk handling, ordering and output. Vary source
 count, imbalance, overlap, key length and CPU budget; use the full API tests to
 protect exact identity and semantics. Preserve signed/unsigned boundary tests.
 
-First consider reducing redundant Arrow hash passes or a canonical threaded
-Arrow join. Reconsider another dependency only for a demonstrated benefit worth
+The current implementation already reuses lookup row maps. Consider a canonical
+threaded Arrow join if further representative measurements justify it. Reconsider another dependency only for a demonstrated benefit worth
 its maintenance cost. Keep scientific UID policy and Arrow-facing interfaces
 independent of this implementation choice; no backend-selection framework is
 needed now.
