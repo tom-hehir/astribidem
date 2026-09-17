@@ -79,6 +79,11 @@ memory use; native hash tables still consume memory.
 
 ## Scientific contracts
 
+For catalogs that need a UID link to one source and a spatial link to another,
+use the separate [`match_mixed` API](docs/mixed-matching.md). It intersects
+independent full-input links through one anchor and returns the same typed
+stable-ID columns. Existing UID and spatial matching APIs remain unchanged.
+
 - The kernel emits the complete inclusive-radius candidate set.
 - Pair policies: anchored_nearest, anchored_unique, mutual_nearest, mutual_unique.
 - Degenerate subset joins require mutual pairwise agreement for N > 2; anchored
