@@ -38,6 +38,36 @@ print(result.table)  # Stable-ID columns a/id and b/id, plus diagnostics.
 Dedupe radii are explicit per survey; zero opts out. IDs must be unique and
 non-null. Input coordinates must already have catalog-specific cleaning applied.
 
+## Match exact UIDs
+
+```python
+from astro_crossmatch import match_uids
+
+matches = match_uids(
+    {"images": ["object-B", "object-A"], "spectra": ["object-A", "object-C"]},
+    ids={"images": [101, 102], "spectra": [201, 202]},
+    join="outer",
+)
+# entity_id | images/id | spectra/id
+#         0 |       101 |       null
+#         1 |       102 |        201
+#         2 |      null |        202
+```
+
+UIDs are exact equality keys, without coordinates or a radius. Omit `ids` when
+UIDs themselves identify source observations. Keys and IDs must each be unique
+and non-null within each source; duplicates are rejected rather than silently
+expanded into a Cartesian join. Integer keys compare exactly across integer
+widths/signedness, including uint64; string keys are case-sensitive. Integer and
+string keys cannot be mixed. Output IDs retain their source Arrow types.
+
+`join="inner"` (default) retains keys present in every source; `"left"` retains
+all anchor keys; `"outer"` retains all keys. The anchor defaults to the first
+mapping entry and can be named with `anchor="spectra"`. Rows follow anchor input
+order, with outer joins appending unseen keys in the remaining sources' input
+order. Column order follows the mapping. Matching policy and types are recorded
+in Arrow schema metadata. This join, like coordinate matching, runs in memory.
+
 ## Scientific contracts
 
 - The kernel emits the complete inclusive-radius candidate set.
