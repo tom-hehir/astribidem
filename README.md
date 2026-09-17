@@ -72,8 +72,10 @@ Keys and row lookups stay in native Arrow arrays and hash kernels; the matcher
 does not create a Python object per key. Integer types are normalized losslessly
 before comparison. Mixed signed/uint64 keys use fixed-width decimal128 with
 scale zero when no standard integer type can represent both domains. Original
-output ID types are preserved. See the [UID benchmark](benchmarks/README.md)
-for measured time and memory use; native hash tables still consume memory.
+output ID types are preserved. The [UID implementation decision](docs/uid-matching.md)
+records the Arrow-native choice, requirements, alternatives and threading
+tradeoffs. See the [UID benchmark](benchmarks/README.md) for measured time and
+memory use; native hash tables still consume memory.
 
 ## Scientific contracts
 

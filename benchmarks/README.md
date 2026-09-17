@@ -1,5 +1,10 @@
 # UID matching benchmark
 
+The [UID implementation decision](../docs/uid-matching.md) records a separate
+comparison of canonical Arrow, NumPy, pandas and Polars approaches, including
+threading and native-string requirements. Arrow remains the chosen dependency;
+the measurements below describe the earlier Python-object-to-Arrow update.
+
 `benchmark_uids.py` measures the UID matcher in fresh, sequential subprocesses.
 Each process warms its implementation, creates native typed inputs, times one
 match call and then validates the complete ordered output, types and nullable
