@@ -1,0 +1,14 @@
+{
+  "semantic_checks": [
+    {
+      "checks_passed": 432,
+      "threads": 1,
+      "pyarrow": "15.0.0"
+    },
+    {
+      "checks_passed": 432,
+      "threads": 4,
+      "pyarrow": "15.0.0"
+    }
+  ]
+}

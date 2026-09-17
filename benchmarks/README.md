@@ -5,6 +5,12 @@ comparison of canonical Arrow, NumPy, pandas and Polars approaches, including
 threading and native-string requirements. Arrow remains the chosen dependency;
 the measurements below describe the earlier Python-object-to-Arrow update.
 
+The [direct Acero evaluation](../docs/uid-acero-evaluation.md) preserves a
+reproducible two-source comparison of the production matcher, optimized
+`index_in`, `Table.join`, and row-position-only Acero joins at 500k and 2m
+rows/source. Run `benchmark_uid_acero.py` using the commands in that report.
+It is an experiment, not a selectable production backend.
+
 `benchmark_uids.py` measures the UID matcher in fresh, sequential subprocesses.
 Each process warms its implementation, creates native typed inputs, times one
 match call and then validates the complete ordered output, types and nullable

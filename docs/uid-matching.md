@@ -60,6 +60,7 @@ concurrent independent builds. Threading can increase peak memory.
 | --- | --- |
 | Arrow `index_in` | Selected primitive. Native integer/string support with existing dependencies and direct row-index results. Repeated validation/membership/lookups can rebuild hash state. |
 | Arrow `Table.join` | Canonical internally threaded alternative; modest gains in some tested cases, with ordering/validation costs. Consider if representative measurements justify a change. |
+| Direct Arrow Acero hash join | Same engine as `Table.join`, with explicit row-position-only output. Evaluated at 500k and 2m rows/source; no consistent overall improvement over lookup. See the [Acero evaluation](uid-acero-evaluation.md). |
 | NumPy sorting + `searchsorted` | Low-memory integer option using native numeric views. A shuffled 500k/source experiment took about 141 ms and 30 MB additional peak RSS. Ordinary Arrow strings have no equivalent simple zero-copy NumPy representation; this would require a separate string path. |
 | pandas integer `Index.get_indexer` | Native integer path was competitive: about 38 ms / 42 MB in the same integer experiment. Adds a dependency and does not provide the required string path. |
 | pandas Arrow-backed string indexing/merge | Tested pandas 3.0.5 paths still construct Python string objects internally. Native input/output dtypes do not guarantee native intermediates. Index ordering/uniqueness checks cause object conversion even though part of merge factorization uses Arrow. |
@@ -111,6 +112,15 @@ dependencies. RSS increments are changes in process high-water marks after
 fixture creation, not exact allocation counts; allocator reuse and preparation
 peaks affect them. These prototypes do not establish N-source, left-join,
 chunked-input, minimum-version or survey-scale performance.
+
+## Direct Acero follow-up
+
+A subsequent [Acero experiment](uid-acero-evaluation.md) compares the committed
+matcher, a lookup optimization, `Table.join`, and a public Acero plan that emits
+only row positions. It includes 500k and 2m rows/source, a reproducible prototype,
+and compatibility checks on PyArrow 15 and 25. Threaded Acero speeds up some
+joins but costs more memory at 2m; omitting key output provides no consistent
+overall advantage. Production remains unchanged.
 
 ## When to revisit
 
