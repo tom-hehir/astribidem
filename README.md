@@ -68,6 +68,13 @@ order, with outer joins appending unseen keys in the remaining sources' input
 order. Column order follows the mapping. Matching policy and types are recorded
 in Arrow schema metadata. This join, like coordinate matching, runs in memory.
 
+Keys and row lookups stay in native Arrow arrays and hash kernels; the matcher
+does not create a Python object per key. Integer types are normalized losslessly
+before comparison. Mixed signed/uint64 keys use fixed-width decimal128 with
+scale zero when no standard integer type can represent both domains. Original
+output ID types are preserved. See the [UID benchmark](benchmarks/README.md)
+for measured time and memory use; native hash tables still consume memory.
+
 ## Scientific contracts
 
 - The kernel emits the complete inclusive-radius candidate set.

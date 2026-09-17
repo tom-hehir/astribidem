@@ -1,0 +1,279 @@
+{
+  "label": "native_arrays",
+  "module": "/private/tmp/crossmatch-packages.q54kkV/astro-crossmatch/src/astro_crossmatch/uids.py",
+  "python": "3.13.5 (main, Jun 12 2025, 12:22:43) [Clang 20.1.4 ]",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "numpy": "2.5.3",
+  "pyarrow": "25.0.1",
+  "repeats": 3,
+  "seed": 20260917,
+  "notes": "Isolated, sequential, warmed workers; timed matching only; full ordered output checked after measurement. RSS increment is relative to the process high-water mark after creating inputs, not a precise allocation count. Decimal MB.",
+  "summary": [
+    {
+      "case": "int64",
+      "join": "inner",
+      "input_rows_per_source": 500000,
+      "output_rows": 250000,
+      "median_seconds": 0.16173604200594127,
+      "median_peak_rss_increment_mb": 130.023424
+    },
+    {
+      "case": "int64",
+      "join": "outer",
+      "input_rows_per_source": 500000,
+      "output_rows": 750000,
+      "median_seconds": 0.2002593339420855,
+      "median_peak_rss_increment_mb": 134.004736
+    },
+    {
+      "case": "string",
+      "join": "inner",
+      "input_rows_per_source": 100000,
+      "output_rows": 50000,
+      "median_seconds": 0.04022404085844755,
+      "median_peak_rss_increment_mb": 24.100864
+    },
+    {
+      "case": "string",
+      "join": "outer",
+      "input_rows_per_source": 100000,
+      "output_rows": 150000,
+      "median_seconds": 0.0530691659078002,
+      "median_peak_rss_increment_mb": 28.311552
+    },
+    {
+      "case": "mixed_integer",
+      "join": "inner",
+      "input_rows_per_source": 100000,
+      "output_rows": 50000,
+      "median_seconds": 0.02654983289539814,
+      "median_peak_rss_increment_mb": 30.195712
+    },
+    {
+      "case": "mixed_integer",
+      "join": "outer",
+      "input_rows_per_source": 100000,
+      "output_rows": 150000,
+      "median_seconds": 0.032912875059992075,
+      "median_peak_rss_increment_mb": 31.096832
+    }
+  ],
+  "measurements": [
+    {
+      "case": "int64",
+      "join": "inner",
+      "input_rows_per_source": 500000,
+      "output_rows": 250000,
+      "seconds": 0.1603255830705166,
+      "rss_baseline_mb": 83.132416,
+      "peak_rss_mb": 213.139456,
+      "peak_rss_increment_mb": 130.00704,
+      "validated": true,
+      "repeat": 1
+    },
+    {
+      "case": "int64",
+      "join": "inner",
+      "input_rows_per_source": 500000,
+      "output_rows": 250000,
+      "seconds": 0.16173604200594127,
+      "rss_baseline_mb": 83.197952,
+      "peak_rss_mb": 213.221376,
+      "peak_rss_increment_mb": 130.023424,
+      "validated": true,
+      "repeat": 2
+    },
+    {
+      "case": "int64",
+      "join": "inner",
+      "input_rows_per_source": 500000,
+      "output_rows": 250000,
+      "seconds": 0.1627552080899477,
+      "rss_baseline_mb": 83.165184,
+      "peak_rss_mb": 213.204992,
+      "peak_rss_increment_mb": 130.039808,
+      "validated": true,
+      "repeat": 3
+    },
+    {
+      "case": "int64",
+      "join": "outer",
+      "input_rows_per_source": 500000,
+      "output_rows": 750000,
+      "seconds": 0.20194845809601247,
+      "rss_baseline_mb": 83.410944,
+      "peak_rss_mb": 217.41568,
+      "peak_rss_increment_mb": 134.004736,
+      "validated": true,
+      "repeat": 1
+    },
+    {
+      "case": "int64",
+      "join": "outer",
+      "input_rows_per_source": 500000,
+      "output_rows": 750000,
+      "seconds": 0.2002593339420855,
+      "rss_baseline_mb": 83.329024,
+      "peak_rss_mb": 217.317376,
+      "peak_rss_increment_mb": 133.988352,
+      "validated": true,
+      "repeat": 2
+    },
+    {
+      "case": "int64",
+      "join": "outer",
+      "input_rows_per_source": 500000,
+      "output_rows": 750000,
+      "seconds": 0.1993430000729859,
+      "rss_baseline_mb": 83.279872,
+      "peak_rss_mb": 217.300992,
+      "peak_rss_increment_mb": 134.02112,
+      "validated": true,
+      "repeat": 3
+    },
+    {
+      "case": "string",
+      "join": "inner",
+      "input_rows_per_source": 100000,
+      "output_rows": 50000,
+      "seconds": 0.039237374905496836,
+      "rss_baseline_mb": 78.102528,
+      "peak_rss_mb": 102.203392,
+      "peak_rss_increment_mb": 24.100864,
+      "validated": true,
+      "repeat": 1
+    },
+    {
+      "case": "string",
+      "join": "inner",
+      "input_rows_per_source": 100000,
+      "output_rows": 50000,
+      "seconds": 0.04022404085844755,
+      "rss_baseline_mb": 78.102528,
+      "peak_rss_mb": 102.203392,
+      "peak_rss_increment_mb": 24.100864,
+      "validated": true,
+      "repeat": 2
+    },
+    {
+      "case": "string",
+      "join": "inner",
+      "input_rows_per_source": 100000,
+      "output_rows": 50000,
+      "seconds": 0.04043629113584757,
+      "rss_baseline_mb": 78.06976,
+      "peak_rss_mb": 102.170624,
+      "peak_rss_increment_mb": 24.100864,
+      "validated": true,
+      "repeat": 3
+    },
+    {
+      "case": "string",
+      "join": "outer",
+      "input_rows_per_source": 100000,
+      "output_rows": 150000,
+      "seconds": 0.049401499796658754,
+      "rss_baseline_mb": 78.249984,
+      "peak_rss_mb": 106.561536,
+      "peak_rss_increment_mb": 28.311552,
+      "validated": true,
+      "repeat": 1
+    },
+    {
+      "case": "string",
+      "join": "outer",
+      "input_rows_per_source": 100000,
+      "output_rows": 150000,
+      "seconds": 0.05898670805618167,
+      "rss_baseline_mb": 78.266368,
+      "peak_rss_mb": 106.594304,
+      "peak_rss_increment_mb": 28.327936,
+      "validated": true,
+      "repeat": 2
+    },
+    {
+      "case": "string",
+      "join": "outer",
+      "input_rows_per_source": 100000,
+      "output_rows": 150000,
+      "seconds": 0.0530691659078002,
+      "rss_baseline_mb": 78.135296,
+      "peak_rss_mb": 106.397696,
+      "peak_rss_increment_mb": 28.2624,
+      "validated": true,
+      "repeat": 3
+    },
+    {
+      "case": "mixed_integer",
+      "join": "inner",
+      "input_rows_per_source": 100000,
+      "output_rows": 50000,
+      "seconds": 0.026792499935254455,
+      "rss_baseline_mb": 75.972608,
+      "peak_rss_mb": 106.16832,
+      "peak_rss_increment_mb": 30.195712,
+      "validated": true,
+      "repeat": 1
+    },
+    {
+      "case": "mixed_integer",
+      "join": "inner",
+      "input_rows_per_source": 100000,
+      "output_rows": 50000,
+      "seconds": 0.0262662919703871,
+      "rss_baseline_mb": 75.93984,
+      "peak_rss_mb": 106.119168,
+      "peak_rss_increment_mb": 30.179328,
+      "validated": true,
+      "repeat": 2
+    },
+    {
+      "case": "mixed_integer",
+      "join": "inner",
+      "input_rows_per_source": 100000,
+      "output_rows": 50000,
+      "seconds": 0.02654983289539814,
+      "rss_baseline_mb": 75.956224,
+      "peak_rss_mb": 106.151936,
+      "peak_rss_increment_mb": 30.195712,
+      "validated": true,
+      "repeat": 3
+    },
+    {
+      "case": "mixed_integer",
+      "join": "outer",
+      "input_rows_per_source": 100000,
+      "output_rows": 150000,
+      "seconds": 0.033274290850386024,
+      "rss_baseline_mb": 76.005376,
+      "peak_rss_mb": 107.118592,
+      "peak_rss_increment_mb": 31.113216,
+      "validated": true,
+      "repeat": 1
+    },
+    {
+      "case": "mixed_integer",
+      "join": "outer",
+      "input_rows_per_source": 100000,
+      "output_rows": 150000,
+      "seconds": 0.032912875059992075,
+      "rss_baseline_mb": 76.169216,
+      "peak_rss_mb": 107.266048,
+      "peak_rss_increment_mb": 31.096832,
+      "validated": true,
+      "repeat": 2
+    },
+    {
+      "case": "mixed_integer",
+      "join": "outer",
+      "input_rows_per_source": 100000,
+      "output_rows": 150000,
+      "seconds": 0.03240145812742412,
+      "rss_baseline_mb": 76.152832,
+      "peak_rss_mb": 107.23328,
+      "peak_rss_increment_mb": 31.080448,
+      "validated": true,
+      "repeat": 3
+    }
+  ]
+}

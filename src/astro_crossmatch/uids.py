@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import json
+from collections.abc import Mapping
 from numbers import Integral
 from typing import Any
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
@@ -48,6 +49,40 @@ def _identifiers(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedA
     if pc.count_distinct(array).as_py() != len(array):
         raise ValueError(f"source {name!r}: {kind} must be unique; duplicate values")
     return array
+
+
+def _common_key_type(keys: Mapping[str, pa.Array | pa.ChunkedArray]) -> pa.DataType:
+    """Choose a lossless native representation for Arrow equality kernels."""
+    types = {array.type for array in keys.values()}
+    if all(pa.types.is_integer(dtype) for dtype in types):
+        signed = [
+            dtype.bit_width for dtype in types if pa.types.is_signed_integer(dtype)
+        ]
+        unsigned = [
+            dtype.bit_width for dtype in types if pa.types.is_unsigned_integer(dtype)
+        ]
+        if not signed or not unsigned:
+            return max(types, key=lambda dtype: dtype.bit_width)
+        if max(unsigned) < 64:
+            # The next signed width holds every value of a smaller unsigned
+            # type. Never let a signed/unsigned comparison fall back to float.
+            return getattr(pa, f"int{max(max(signed), 2 * max(unsigned))}")()
+        # No native 64-bit integer holds both negative int64 and full uint64.
+        # Decimal128 with scale zero is a fixed-width, exact integer encoding;
+        # casting and hashing stay in Arrow, including for chunked input.
+        return pa.decimal128(20, 0)
+    return pa.large_string() if pa.large_string() in types else pa.string()
+
+
+def _append_keys(
+    existing: pa.Array | pa.ChunkedArray, extra: pa.Array | pa.ChunkedArray
+) -> pa.ChunkedArray:
+    """Append native buffers without copying the accumulated outer-join keys."""
+    existing_chunks = (
+        existing.chunks if isinstance(existing, pa.ChunkedArray) else [existing]
+    )
+    extra_chunks = extra.chunks if isinstance(extra, pa.ChunkedArray) else [extra]
+    return pa.chunked_array([*existing_chunks, *extra_chunks], type=existing.type)
 
 
 def match_uids(
@@ -116,32 +151,30 @@ def match_uids(
         if len(identifiers[name]) != len(keys[name]):
             raise ValueError(f"source {name!r}: IDs and UIDs must have the same length")
 
-    # Python ints preserve all Arrow signed/unsigned integer values. Arrow hash
-    # joins can coerce mixed signedness to a lossy common representation.
-    positions = {
-        name: {value: row for row, value in enumerate(keys[name].to_pylist())}
-        for name in names
-    }
-    ordered = list(positions[anchor])
+    # Normalize explicitly before calling equality kernels: their implicit
+    # signed/unsigned coercion need not preserve full-range integer identity.
+    # Only per-source metadata is held in Python; keys and lookups stay native.
+    key_type = _common_key_type(keys)
+    comparable = {name: pc.cast(array, key_type) for name, array in keys.items()}
+    ordered = comparable[anchor]
     if join == "inner":
-        ordered = [
-            value
-            for value in ordered
-            if all(value in positions[name] for name in names)
-        ]
+        for name in names:
+            if name != anchor:
+                ordered = pc.filter(
+                    ordered, pc.is_in(ordered, value_set=comparable[name])
+                )
     elif join == "outer":
-        seen = set(ordered)
         for name in names:
             if name == anchor:
                 continue
-            for value in positions[name]:
-                if value not in seen:
-                    ordered.append(value)
-                    seen.add(value)
-    columns = {"entity_id": pa.array(range(len(ordered)), type=pa.int64())}
+            extra = pc.filter(
+                comparable[name],
+                pc.invert(pc.is_in(comparable[name], value_set=ordered)),
+            )
+            ordered = _append_keys(ordered, extra)
+    columns = {"entity_id": pa.array(np.arange(len(ordered), dtype=np.int64))}
     for name in names:
-        lookup = positions[name]
-        rows = pa.array([lookup.get(value) for value in ordered], type=pa.int64())
+        rows = pc.index_in(ordered, value_set=comparable[name])
         columns[f"{name}/id"] = pc.take(identifiers[name], rows)
     provenance = {
         "method": "exact_uid",
