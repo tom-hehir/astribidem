@@ -1,4 +1,4 @@
-"""Compose independent full-input UID and spatial links through one anchor."""
+"""Hub-and-spoke matching with independent UID or spatial anchor links."""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def _spatial_input(name: str, table: pa.Table, identifiers: pa.ChunkedArray):
     return survey, rank_to_row
 
 
-def match_mixed(
+def match_hub_and_spoke(
     catalogs: Mapping[str, pa.Table],
     *,
     anchor: str,
@@ -82,7 +82,11 @@ def match_mixed(
     dedupe_radius_arcsec: Mapping[str, float],
     workers: int = 1,
 ) -> pa.Table:
-    """Intersect independent UID/spatial anchor links in anchor input order.
+    """Match every spoke to one anchor using UID or spatial links.
+
+    All-UID, all-spatial, and mixed-link configurations use the same topology.
+    Return the inner intersection in anchor input order; every link must
+    succeed, with no spoke-to-spoke tests or groups lacking the anchor.
 
     Each table requires unique, non-null integer or string ``id`` values. UID
     links use ``uid`` when present, otherwise ``id``. Spatial participants need
@@ -93,7 +97,7 @@ def match_mixed(
     Every link uses its complete input catalogs, even when another link has no
     matches. This preserves spatial ambiguity and deduplication decisions.
     Successful links are combined only by anchor ID, with inner intersection;
-    counterparts need not match each other. This differs intentionally from
+    counterparts need not match each other. This differs from
     the all-pairs contract of an N-survey spatial subset join.
 
     Output contains ``entity_id`` and original typed ``<source>/id`` columns.
@@ -222,7 +226,7 @@ def match_mixed(
     del surveys, rank_to_row
 
     configuration = {
-        "method": "mixed",
+        "method": "hub_and_spoke",
         "anchor": anchor,
         "join": "inner",
         "topology": "anchor-pairs",

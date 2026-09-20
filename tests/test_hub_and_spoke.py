@@ -1,4 +1,4 @@
-"""Mixed matching composes independent full-input links through one anchor."""
+"""Hub-and-spoke matching composes independent full-input links through one anchor."""
 
 import json
 from dataclasses import FrozenInstanceError
@@ -7,7 +7,7 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-from astro_crossmatch import SpatialLink, UIDLink, match_mixed
+from astro_crossmatch import SpatialLink, UIDLink, match_hub_and_spoke
 
 
 def catalog(ids, *, uid=None, offsets=None, id_type=None):
@@ -21,7 +21,7 @@ def catalog(ids, *, uid=None, offsets=None, id_type=None):
 
 
 def test_uid_link_ignores_closer_spatial_neighbor_and_uses_distinct_ids():
-    result = match_mixed(
+    result = match_hub_and_spoke(
         {
             "a": catalog([90], uid=["correct"], offsets=[0]),
             "uid": catalog([7, 8], uid=["wrong", "correct"], offsets=[0, 20]),
@@ -51,7 +51,7 @@ def test_four_sources_intersect_links_in_anchor_order_and_keep_column_order(
     }
     if not anchor_first:
         tables = {name: tables[name] for name in ("uid", "sky", "anchor", "last")}
-    result = match_mixed(
+    result = match_hub_and_spoke(
         tables,
         anchor="anchor",
         links={"last": UIDLink(), "sky": SpatialLink(1), "uid": UIDLink()},
@@ -66,7 +66,7 @@ def test_four_sources_intersect_links_in_anchor_order_and_keep_column_order(
         "last/id": [304, 303],
     }
     metadata = json.loads(result.schema.metadata[b"astro_crossmatch.resolved_config"])
-    assert metadata["method"] == "mixed"
+    assert metadata["method"] == "hub_and_spoke"
     assert metadata["anchor"] == "anchor"
     assert metadata["join"] == "inner"
     assert metadata["topology"] == "anchor-pairs"
@@ -84,7 +84,7 @@ def test_earlier_uid_filter_does_not_remove_full_input_spatial_competitor(uid_fi
     }
     if not uid_first:
         tables = {name: tables[name] for name in ("a", "sky", "uid")}
-    result = match_mixed(
+    result = match_hub_and_spoke(
         tables,
         anchor="a",
         links={"uid": UIDLink(), "sky": SpatialLink(1)},
@@ -97,7 +97,7 @@ def test_earlier_uid_filter_does_not_remove_full_input_spatial_competitor(uid_fi
 
 
 def test_uid_eligibility_does_not_change_full_anchor_dedupe_keeper():
-    result = match_mixed(
+    result = match_hub_and_spoke(
         {
             "a": catalog([20, 10], uid=[2, 1], offsets=[0, 0.1]),
             "uid": catalog([100], uid=[2]),
@@ -130,7 +130,7 @@ def test_empty_uid_link_does_not_skip_validation_of_other_full_inputs(invalid):
         links["third"] = SpatialLink(1)
         radii = {"a": 0, "third": 0}
     with pytest.raises(ValueError, match="duplicate|non-null|finite"):
-        match_mixed(
+        match_hub_and_spoke(
             {
                 "a": catalog([10], uid=[1], offsets=[0]),
                 "empty": catalog([], uid=pa.array([], pa.int64()), id_type=pa.int64()),
@@ -157,7 +157,7 @@ def test_spatial_surrogates_keep_lowest_original_id_and_original_arrow_type(
     table = table.set_column(
         0, "id", pa.chunked_array([[], values[:1], [], values[1:]], type=id_type)
     )
-    result = match_mixed(
+    result = match_hub_and_spoke(
         {
             "a": table,
             "uid": catalog([1], uid=[1]),
@@ -176,7 +176,7 @@ def test_spatial_surrogates_keep_lowest_original_id_and_original_arrow_type(
 
 
 def test_uid_links_compare_full_unsigned_range_exactly_and_default_to_id():
-    result = match_mixed(
+    result = match_hub_and_spoke(
         {
             "a": catalog([2**63 - 1, 0], id_type=pa.int64()),
             "b": catalog([2**63, 0], id_type=pa.uint64()),
@@ -198,7 +198,7 @@ def test_uid_links_compare_full_unsigned_range_exactly_and_default_to_id():
 
 
 def test_anchored_spatial_policy_can_repeat_counterpart_observation():
-    result = match_mixed(
+    result = match_hub_and_spoke(
         {"a": catalog([2, 1], offsets=[0, 0.2]), "b": catalog([30], offsets=[0.1])},
         anchor="a",
         links={"b": SpatialLink(1, "anchored_nearest")},
@@ -208,7 +208,7 @@ def test_anchored_spatial_policy_can_repeat_counterpart_observation():
 
 
 def test_counterparts_do_not_need_to_spatially_match_each_other():
-    result = match_mixed(
+    result = match_hub_and_spoke(
         {
             "a": catalog([1], offsets=[0]),
             "b": catalog([2], offsets=[-0.8]),
@@ -254,7 +254,7 @@ def test_invalid_composition_configuration(kwargs, message):
     settings = {"anchor": "a", "links": {"b": UIDLink()}, "dedupe_radius_arcsec": {}}
     settings.update(kwargs)
     with pytest.raises((ValueError, TypeError), match=message):
-        match_mixed({"a": catalog([1]), "b": catalog([1])}, **settings)
+        match_hub_and_spoke({"a": catalog([1]), "b": catalog([1])}, **settings)
 
 
 @pytest.mark.parametrize(
@@ -269,7 +269,7 @@ def test_invalid_composition_configuration(kwargs, message):
 )
 def test_spatial_dedupe_configuration_is_explicit_and_exact(radii):
     with pytest.raises(ValueError, match="radius|spatial participants"):
-        match_mixed(
+        match_hub_and_spoke(
             {"a": catalog([1], offsets=[0]), "b": catalog([2], offsets=[0])},
             anchor="a",
             links={"b": SpatialLink(1)},
@@ -284,7 +284,7 @@ def test_empty_spatial_inputs_keep_original_id_types(empty_name):
         "b": catalog([2**64 - 1], offsets=[0], id_type=pa.uint64()),
     }
     tables[empty_name] = tables[empty_name].slice(0, 0)
-    result = match_mixed(
+    result = match_hub_and_spoke(
         tables,
         anchor="a",
         links={"b": SpatialLink(1)},

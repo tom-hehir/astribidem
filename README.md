@@ -79,10 +79,13 @@ memory use; native hash tables still consume memory.
 
 ## Scientific contracts
 
-For catalogs that need a UID link to one source and a spatial link to another,
-use the separate [`match_mixed` API](docs/mixed-matching.md). It intersects
-independent full-input links through one anchor and returns the same typed
-stable-ID columns. Existing UID and spatial matching APIs remain unchanged.
+For independent links to one anchor, use the separate
+[`match_hub_and_spoke` API](docs/hub-and-spoke-matching.md). Each link can use UID
+or spatial matching; all-UID, all-spatial and mixed-link configurations are
+supported. It intersects full-input link results, requiring every spoke to
+match the anchor without checking spoke-to-spoke relationships, and returns
+typed stable-ID columns. The richer spatial `crossmatch` modes and N-source
+`match_uids` joins remain separate APIs.
 
 - The kernel emits the complete inclusive-radius candidate set.
 - Pair policies: anchored_nearest, anchored_unique, mutual_nearest, mutual_unique.
@@ -97,6 +100,15 @@ stable-ID columns. Existing UID and spatial matching APIs remain unchanged.
 
 Coordinate arrays and candidate relations are currently held in memory. This
 package is not yet a distributed or out-of-core survey processing engine.
+
+## Design proposals
+
+The [grouped UID/spatial design](docs/design/grouped-uid-spatial-matching.md)
+records a deferred possible extension: select one representative position per
+UID-defined object, then apply richer spatial resolution and partial-membership
+policies without requiring a universal anchor. Current UID/spatial composition
+uses hub-and-spoke matching. The grouped design will only be implemented when a
+concrete use case needs it; no implementation or AION-2 integration is planned.
 
 ## Development
 
