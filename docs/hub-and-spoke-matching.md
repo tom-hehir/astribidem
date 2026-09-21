@@ -107,12 +107,12 @@ Matching behavior is unchanged. The resolved-config provenance method is now
 `hub_and_spoke`, so saved workflow identities using the old method are
 different.
 
-`hf-crossmatch` remains pinned to the original core commit and continues to use
-its existing `match_catalog_mixed` API and `mixed` CLI method. Its caller
-migration and dependency-pin update are deferred until the higher-level API
-decision and any resulting core changes are complete. Upgrade that consumer's
-imports and core pin together; the historical pin does not expose the renamed
-API.
+`hf-crossmatch` now exposes `match_catalog_hub_and_spoke` and the
+`hub_and_spoke` CLI method, with its dependency pinned to a core commit
+providing the renamed API. Its
+[migration guide](https://github.com/tom-hehir/hf-crossmatch/blob/5de543ac020e8a89854c2b97a1e0911772b362d4/docs/cli.md#migrating-the-original-anchor-link-interface)
+covers the import and configuration changes and the new work directory needed
+for workflows saved under `mixed`.
 
 ## Initial implementation validation
 
