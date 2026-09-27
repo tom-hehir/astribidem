@@ -309,3 +309,14 @@ def test_low_precision_catalog_coordinates_warn():
             links={"b": SpatialLink(1)},
             dedupe_radius_arcsec={"a": 0, "b": 0},
         )
+
+
+def test_non_numeric_catalog_coordinates_are_rejected():
+    table = pa.table({"id": [1], "ra": ["180.0"], "dec": [0.0]})
+    with pytest.raises(ValueError, match="ra must be numeric"):
+        match_hub_and_spoke(
+            {"a": table, "b": catalog([2], offsets=[0.1])},
+            anchor="a",
+            links={"b": SpatialLink(1)},
+            dedupe_radius_arcsec={"a": 0, "b": 0},
+        )

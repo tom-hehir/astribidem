@@ -14,7 +14,7 @@ import pyarrow.compute as pc
 
 from astro_crossmatch.api import crossmatch
 from astro_crossmatch.edges import survey_coords_from_arrays
-from astro_crossmatch.kernel import resolve_workers, warn_low_precision
+from astro_crossmatch.kernel import resolve_workers
 from astro_crossmatch.modes import SUBSET_JOIN_POLICIES, DegenerateCrossmatchConfig
 from astro_crossmatch.uids import _identifiers, match_uids
 
@@ -56,12 +56,12 @@ def _spatial_input(name: str, table: pa.Table):
         raise ValueError(f"spatial catalog {name!r} requires ra and dec columns")
     coordinates = []
     for column in ("ra", "dec"):
-        kind = table[column].type
-        if pa.types.is_floating(kind) and kind.bit_width < 64:
-            warn_low_precision(name, column, kind.bit_width)
-        values = pc.cast(table[column], pa.float64())
+        values = table[column]
+        if not (pa.types.is_floating(values.type) or pa.types.is_integer(values.type)):
+            raise ValueError(f"catalog {name!r}: {column} must be numeric")
         if values.null_count:
             raise ValueError(f"catalog {name!r}: {column} must be non-null")
+        # Keep the column's own type: the shared conversion checks precision.
         numeric = values.to_numpy(zero_copy_only=False)
         if not np.isfinite(numeric).all():
             raise ValueError(f"catalog {name!r}: {column} must be finite")
