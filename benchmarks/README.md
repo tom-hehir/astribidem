@@ -13,8 +13,11 @@ It is an experiment, not a selectable production backend.
 
 `benchmark_uids.py` measures the UID matcher in fresh, sequential subprocesses.
 Each process warms its implementation, creates native typed inputs, times one
-match call and then validates the complete ordered output, types and nullable
-memberships. There are three repeats per case; the table reports medians.
+match call and then validates the complete ordered row output and nullable
+memberships. The matcher now returns rows, so mapping them to IDs is a separate
+`rows_to_ids` step outside the timing; earlier measurements below included the
+ID gather. Validating an older typed-ID implementation needs the script from
+that commit. There are three repeats per case; the table reports medians.
 
 Run from the repository root with the package's dependencies installed:
 

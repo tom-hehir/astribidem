@@ -56,25 +56,30 @@ trigger a warning because their rounding already limits positional accuracy
 ## Match exact UIDs
 
 ```python
-from astro_crossmatch import match_uids
+from astro_crossmatch import match_uids, rows_to_ids
 
-matches = match_uids(
-    {"images": ["object-B", "object-A"], "spectra": ["object-A", "object-C"]},
-    ids={"images": [101, 102], "spectra": [201, 202]},
-    join="outer",
-)
+uids = {"images": ["object-B", "object-A"], "spectra": ["object-A", "object-C"]}
+matches = match_uids(uids, join="outer")
+# entity_id | images/row_index | spectra/row_index
+#         0 |                0 |              null
+#         1 |                1 |                 0
+#         2 |             null |                 1
+
+matches = rows_to_ids(matches, {"images": [101, 102], "spectra": [201, 202]})
 # entity_id | images/id | spectra/id
 #         0 |       101 |       null
 #         1 |       102 |        201
 #         2 |      null |        202
 ```
 
-UIDs are exact equality keys, without coordinates or a radius. Omit `ids` when
-UIDs themselves identify source observations. Keys and IDs must each be unique
-and non-null within each source; duplicates are rejected rather than silently
+UIDs are exact equality keys, without coordinates or a radius. Like coordinate
+matching, `match_uids` returns rows: row `i` of a source is its `i`-th UID, and
+null means the source is absent. Map rows to observation IDs, or back to the
+UIDs themselves with `rows_to_ids(matches, uids)`. Keys must be unique and
+non-null within each source; duplicates are rejected rather than silently
 expanded into a Cartesian join. Integer keys compare exactly across integer
 widths/signedness, including uint64; string keys are case-sensitive. Integer and
-string keys cannot be mixed. Output IDs retain their source Arrow types.
+string keys cannot be mixed. `rows_to_ids` preserves ID Arrow types.
 
 `join="inner"` (default) retains keys present in every source; `"left"` retains
 all anchor keys; `"outer"` retains all keys. The anchor defaults to the first
@@ -86,8 +91,8 @@ in Arrow schema metadata. This join, like coordinate matching, runs in memory.
 Keys and row lookups stay in native Arrow arrays and hash kernels; the matcher
 does not create a Python object per key. Integer types are normalized losslessly
 before comparison. Mixed signed/uint64 keys use fixed-width decimal128 with
-scale zero when no standard integer type can represent both domains. Original
-output ID types are preserved. The [UID implementation decision](docs/uid-matching.md)
+scale zero when no standard integer type can represent both domains. The
+[UID implementation decision](docs/uid-matching.md)
 records the Arrow-native choice, requirements, alternatives and threading
 tradeoffs. See the [UID benchmark](benchmarks/README.md) for measured time and
 memory use; native hash tables still consume memory.

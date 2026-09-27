@@ -6,7 +6,17 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-from astro_crossmatch import match_uids
+from astro_crossmatch import match_uids as match_uid_rows
+from astro_crossmatch import rows_to_ids
+
+
+def match_uids(uids, *, ids=None, **kwargs):
+    """Rows mapped to observation IDs, or back to the UIDs when none are given.
+
+    Most tests below assert typed-ID results; this composes them from the row
+    output exactly as a caller would.
+    """
+    return rows_to_ids(match_uid_rows(uids, **kwargs), ids if ids is not None else uids)
 
 
 @pytest.mark.parametrize(
@@ -115,10 +125,10 @@ def test_empty_sources_retain_output_types(join):
         ({"a": [1], "b": ["1"]}, {}, "no coercion"),
         ({"a": [1]}, {"join": "right"}, "join must"),
         ({"a": [1]}, {"anchor": "b"}, "anchor must"),
-        ({"a": [1]}, {"ids": {"b": [1]}}, "every input source"),
+        ({"a": [1]}, {"ids": {"b": [1]}}, "no 'b/row_index' column"),
         ({"a": [1, 2]}, {"ids": {"a": [10, 10]}}, "duplicate"),
         ({"a": [1]}, {"ids": {"a": [None]}}, "non-null"),
-        ({"a": [1, 2]}, {"ids": {"a": [10]}}, "same length"),
+        ({"a": [1, 2]}, {"ids": {"a": [10]}}, "1 IDs for 2 input rows"),
         ({"a": [-1, 2**63]}, {}, "fit one Arrow integer type"),
     ],
 )
@@ -128,10 +138,30 @@ def test_invalid_or_ambiguous_input_is_rejected(uids, kwargs, message):
 
 
 def test_empty_python_sequence_infers_other_source_key_type():
-    result = match_uids({"a": [], "b": ["x"]}, join="outer")
-    assert result.to_pydict() == {"entity_id": [0], "a/id": [None], "b/id": ["x"]}
-    assert result["a/id"].type == pa.string()
-    assert match_uids({"a": [], "b": []}).num_rows == 0
+    # An untyped empty list must not be taken as integers and clash with strings.
+    result = match_uid_rows({"a": [], "b": ["x"]}, join="outer")
+    assert result.to_pydict() == {
+        "entity_id": [0],
+        "a/row_index": [None],
+        "b/row_index": [0],
+    }
+    assert match_uid_rows({"a": [], "b": []}).num_rows == 0
+
+
+def test_rows_are_int64_positions_with_row_counts_recorded():
+    result = match_uid_rows(
+        {"a": [2, 1, 4], "b": np.array([3, 1], dtype="int8")}, join="outer"
+    )
+    assert result.to_pydict() == {
+        "entity_id": [0, 1, 2, 3],
+        "a/row_index": [0, 1, 2, None],
+        "b/row_index": [None, 1, None, 0],
+    }
+    assert result.schema.field("b/row_index").type == pa.int64()
+    assert json.loads(result.schema.metadata[b"astro_crossmatch.n_rows"]) == {
+        "a": 3,
+        "b": 2,
+    }
 
 
 def test_python_integer_below_int64_is_rejected_clearly():

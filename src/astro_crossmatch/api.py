@@ -85,6 +85,9 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> ModeResult:
     metadata[b"astro_crossmatch.dedupe"] = json.dumps(
         outcomes, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
+    metadata[b"astro_crossmatch.n_rows"] = json.dumps(
+        {survey.name: survey.n_rows for survey in edges.surveys}, sort_keys=True
+    ).encode()
     return ModeResult(result.table.replace_schema_metadata(metadata), result.summary)
 
 
@@ -128,10 +131,11 @@ def rows_to_ids(
     *,
     id_columns: Mapping[str, str] | None = None,
 ) -> pa.Table:
-    """Replace ``<survey>/row_index`` columns of a resolved index by IDs.
+    """Replace ``<survey>/row_index`` columns of a match index by IDs.
 
     ``ids[survey]`` holds one unique, non-null integer or string ID per input
-    row, in the order the survey's coordinates were passed to the edge build.
+    row, in input order (the coordinates passed to the edge build, or the
+    UIDs passed to ``match_uids``).
     Each named survey's row column becomes ``<survey>/<id column>`` (default
     ``id``) in the same position; null rows stay null. Surveys not named in
     ``ids`` keep their row column.
@@ -140,12 +144,7 @@ def rows_to_ids(
     unknown = set(id_columns) - set(ids)
     if unknown:
         raise ValueError(f"id_columns names surveys without ids: {sorted(unknown)}")
-    n_rows = {
-        name: outcome["n_rows"]
-        for name, outcome in json.loads(
-            table.schema.metadata[b"astro_crossmatch.dedupe"]
-        ).items()
-    }
+    n_rows = json.loads(table.schema.metadata[b"astro_crossmatch.n_rows"])
     for survey, values in ids.items():
         row_column = f"{survey}/row_index"
         if row_column not in table.column_names:

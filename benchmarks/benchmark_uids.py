@@ -82,7 +82,7 @@ def validate(result, keys, ranks, n: int, join: str):
     else:
         order = np.concatenate([ranks["a"], ranks["b"][ranks["b"] >= n]])
     assert result.num_rows == len(order)
-    assert result.column_names == ["entity_id", "a/id", "b/id"]
+    assert result.column_names == ["entity_id", "a/row_index", "b/row_index"]
     assert (
         result["entity_id"]
         .combine_chunks()
@@ -92,10 +92,9 @@ def validate(result, keys, ranks, n: int, join: str):
         inverse = np.full(n + half, -1, dtype=np.int64)
         inverse[ranks[name]] = np.arange(n, dtype=np.int64)
         rows = inverse[order]
-        expected = pc.take(key_array, pa.array(rows, mask=rows < 0))
-        actual = result[f"{name}/id"].combine_chunks()
-        assert actual.type == key_array.type
-        assert actual.equals(expected), f"incorrect {name} identifiers or ordering"
+        expected = pa.array(rows, pa.int64(), mask=rows < 0)
+        actual = result[f"{name}/row_index"].combine_chunks()
+        assert actual.equals(expected), f"incorrect {name} rows or ordering"
 
 
 def peak_rss_bytes():

@@ -161,15 +161,9 @@ def match_hub_and_spoke(
                     source: catalogs[source][uid_columns[source]]
                     for source in pair_names
                 },
-                ids={
-                    source: pa.array(
-                        np.arange(len(identifiers[source]), dtype=np.int64)
-                    )
-                    for source in pair_names
-                },
                 anchor=anchor,
             )
-            pair_rows = {source: pair[f"{source}/id"] for source in pair_names}
+            pair_rows = {source: pair[f"{source}/row_index"] for source in pair_names}
             link_provenance[name] = {
                 "method": "uid",
                 "uid_columns": uid_columns,
@@ -177,8 +171,7 @@ def match_hub_and_spoke(
                     pair.schema.metadata[b"astro_crossmatch.resolved_config"]
                 ),
             }
-            # Describe the logical catalog IDs, not the temporary row positions
-            # supplied to the UID matcher to avoid gathering IDs twice.
+            # Record the catalog ID types gathered into the final table.
             for survey in link_provenance[name]["resolved_config"]["surveys"]:
                 survey["id_type"] = str(identifiers[survey["name"]].type)
         else:
