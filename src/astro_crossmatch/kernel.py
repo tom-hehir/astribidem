@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import math
 import os
+import warnings
 from collections import deque
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -58,10 +59,34 @@ DEG_TO_RAD = math.pi / 180.0
 _ARCSEC_TO_RAD = math.pi / (180.0 * 3600.0)
 
 
-def radec_to_xyz(ra: np.ndarray, dec: np.ndarray) -> np.ndarray:
-    """Unit vectors on the sphere for degree-valued ``ra`` / ``dec``."""
-    ra_rad = np.asarray(ra, dtype=np.float64) * DEG_TO_RAD
-    dec_rad = np.asarray(dec, dtype=np.float64) * DEG_TO_RAD
+def warn_low_precision(survey: str | None, column: str, bits: int) -> None:
+    """Warn that a coordinate column is less precise than float64."""
+    where = f"survey {survey!r}: " if survey is not None else ""
+    warnings.warn(
+        f"{where}{column} is {bits}-bit floating point, less precise than "
+        "float64 (float32 RA is spaced up to 0.11 arcsec apart near 360 deg). "
+        "Matching computes in float64 but cannot restore the lost precision; "
+        "pass float64 coordinates to avoid this.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
+def radec_to_xyz(
+    ra: np.ndarray, dec: np.ndarray, *, name: str | None = None
+) -> np.ndarray:
+    """Unit vectors on the sphere for degree-valued ``ra`` / ``dec``.
+
+    Every coordinate conversion goes through here, in float64. Floating-point
+    inputs less precise than float64 trigger a ``UserWarning``, naming the
+    survey when ``name`` is given.
+    """
+    ra, dec = np.asarray(ra), np.asarray(dec)
+    for column, values in (("ra", ra), ("dec", dec)):
+        if values.dtype.kind == "f" and values.dtype.itemsize < 8:
+            warn_low_precision(name, column, 8 * values.dtype.itemsize)
+    ra_rad = ra.astype(np.float64) * DEG_TO_RAD
+    dec_rad = dec.astype(np.float64) * DEG_TO_RAD
     r_xy = np.cos(dec_rad)
     return np.stack(
         [r_xy * np.cos(ra_rad), r_xy * np.sin(ra_rad), np.sin(dec_rad)],

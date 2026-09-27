@@ -166,3 +166,32 @@ def test_no_upstream_or_storage_dependencies_are_imported():
         name.startswith(("astral_projections", "aion2", "lsdb", "hats"))
         for name in sys.modules
     )
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float16])
+def test_low_precision_coordinates_warn_but_compute_in_float64(dtype):
+    ra = np.array([180.0, 180.0001], dtype=dtype)
+    with pytest.warns(UserWarning, match="16-bit|32-bit"):
+        coords = survey_coords_from_arrays("a", ra, np.zeros(2, dtype=np.float64))
+    assert coords.xyz.dtype == np.float64
+
+
+@pytest.mark.parametrize(
+    "ra", [[180.0, 181.0], np.array([180, 181]), np.array([180.0, 181.0])]
+)
+def test_float64_integer_and_list_coordinates_do_not_warn(ra, recwarn):
+    survey_coords_from_arrays("a", ra, [0.0, 0.0])
+    assert not recwarn.list
+
+
+def test_geometry_adapter_warns_on_low_precision_coordinates():
+    from astro_crossmatch.geometry import crossmatch_radec, dedupe_and_crossmatch_radec
+
+    low = (np.array([180.0], np.float32), np.array([0.0], np.float32))
+    high = (np.array([180.0]), np.array([0.0]))
+    with pytest.warns(UserWarning, match="32-bit"):
+        crossmatch_radec([low, high], radius_arcsec=1.0)
+    with pytest.warns(UserWarning, match="32-bit"):
+        dedupe_and_crossmatch_radec(
+            [low, high], 1.0, names=["a", "b"], dedupe_radii_arcsec=[0.0, 0.0]
+        )

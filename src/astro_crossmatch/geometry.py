@@ -302,8 +302,8 @@ def dedupe_and_crossmatch_radec(
     active_indices: list[np.ndarray] = []
     filtered: list[tuple[np.ndarray, np.ndarray]] = []
     for (ra, dec), name, dedupe_radius in zip(coords, names, dedupe_radii_arcsec):
-        ra = np.asarray(ra, dtype=np.float64)
-        dec = np.asarray(dec, dtype=np.float64)
+        ra = np.asarray(ra)
+        dec = np.asarray(dec)
         outcome, active = dedupe_radec(ra, dec, dedupe_radius, name=name)
         outcomes.append(outcome)
         active_indices.append(np.flatnonzero(active))

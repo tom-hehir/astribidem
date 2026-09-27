@@ -292,3 +292,20 @@ def test_empty_spatial_inputs_keep_original_id_types(empty_name):
     assert result.num_rows == 0
     assert result["a/id"].type == pa.large_string()
     assert result["b/id"].type == pa.uint64()
+
+
+def test_low_precision_catalog_coordinates_warn():
+    table = pa.table(
+        {
+            "id": [1],
+            "ra": pa.array([180.0], pa.float32()),
+            "dec": pa.array([0.0], pa.float64()),
+        }
+    )
+    with pytest.warns(UserWarning, match="ra is 32-bit"):
+        match_hub_and_spoke(
+            {"a": table, "b": catalog([2], offsets=[0.1])},
+            anchor="a",
+            links={"b": SpatialLink(1)},
+            dedupe_radius_arcsec={"a": 0, "b": 0},
+        )

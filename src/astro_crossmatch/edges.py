@@ -38,16 +38,21 @@ def survey_coords_from_arrays(
     ra: np.ndarray,
     dec: np.ndarray,
 ) -> SurveyCoords:
-    """Build coordinates from RA/Dec degree arrays."""
-    ra = np.asarray(ra, dtype=np.float64)
-    dec = np.asarray(dec, dtype=np.float64)
+    """Build coordinates from RA/Dec degree arrays.
+
+    Coordinates are converted to float64 before any calculation. Floating
+    point inputs less precise than float64 trigger a ``UserWarning``, because
+    their rounding already limits positional accuracy.
+    """
+    ra = np.asarray(ra)
+    dec = np.asarray(dec)
     if ra.ndim != 1 or dec.ndim != 1:
         raise ValueError(f"survey {name!r}: ra/dec must be 1-D")
     if len(ra) != len(dec):
         raise ValueError(
             f"survey {name!r}: ra/dec shapes differ: {ra.shape} vs {dec.shape}"
         )
-    return SurveyCoords(name=name, xyz=radec_to_xyz(ra, dec))
+    return SurveyCoords(name=name, xyz=radec_to_xyz(ra, dec, name=name))
 
 
 def dedupe_survey(

@@ -48,7 +48,10 @@ IDs with `rows_to_ids`. The IDs must be unique, non-null and in the same order
 as the coordinates; their Arrow types are preserved.
 
 Dedupe radii are explicit per survey; zero opts out. Input coordinates must
-already have catalog-specific cleaning applied.
+already have catalog-specific cleaning applied. Pass RA/Dec in degrees as
+float64: matching always computes in float64, and float32 or float16 inputs
+trigger a warning because their rounding already limits positional accuracy
+(float32 RA is spaced up to 0.11 arcsec apart near 360 deg).
 
 ## Match exact UIDs
 
