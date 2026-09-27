@@ -143,8 +143,9 @@ the same edges under several modes, save them, or stream them to disk while
 building, use `build_edges`, `resolve`, `write_edges`, `read_edges` and
 `build_edges_to_directory`; `audit_edges` summarises dedupe, pair and
 component statistics. See [candidate edges](docs/candidate-edges.md).
-Coordinates and KD-trees are always held in memory. This package is not yet a
-distributed or out-of-core survey processing engine.
+Coordinates and KD-trees are always held in memory. The
+[banded edge build design](docs/design/banded-edge-builds.md) describes the
+planned route for catalogs larger than memory.
 
 ## Design proposals
 
@@ -154,6 +155,12 @@ UID-defined object, then apply richer spatial resolution and partial-membership
 policies without requiring a universal anchor. Current UID/spatial composition
 uses hub-and-spoke matching. The grouped design will only be implemented when a
 concrete use case needs it; no implementation or AION-2 integration is planned.
+
+The [banded edge build design](docs/design/banded-edge-builds.md) records the
+agreed plan for catalogs larger than memory: declination bands with a margin,
+deferral of groups that cross band boundaries to a sweep over the boundaries,
+and saved edges made of self-contained segments. It also records every option
+considered and why it was accepted or rejected. It is not yet implemented.
 
 ## Development
 
