@@ -16,6 +16,7 @@ from astro_crossmatch import (
     write_edges,
 )
 from astro_crossmatch.banded import as_chunks, build_edges_by_band, write_band_layout
+from astro_crossmatch.edge_files import segment_names
 from astro_crossmatch.index_files import resolve_to_file
 
 FIXTURES = Path(__file__).with_name("fixtures")
@@ -113,3 +114,54 @@ def test_single_segment_edges_resolve_to_the_same_index(tmp_path):
     assert pq.read_table(tmp_path / "index.parquet").equals(
         resolve(edges, mode).table, check_metadata=True
     )
+
+
+_PEAK_SCRIPT = """
+import sys
+import pyarrow as pa
+from astro_crossmatch import EntitywiseCrossmatchConfig
+from astro_crossmatch.edge_files import segment_names
+from astro_crossmatch.index_files import resolve_to_file
+
+edges, path, batch_rows = sys.argv[1:]
+resolve_to_file(
+    edges, EntitywiseCrossmatchConfig(), path, batch_rows=int(batch_rows)
+)
+print(pa.default_memory_pool().max_memory())
+"""
+
+
+def test_merge_memory_stays_near_one_batch_across_many_segments(tmp_path):
+    import subprocess
+
+    # Rows arrive in random sky order, so every band segment's rows are
+    # scattered over the whole row range: the case a per-segment batch misses.
+    rng = np.random.default_rng(3)
+    n = 60_000
+    ra, dec = rng.uniform(0, 2, n), rng.uniform(-2, 2, n)
+    jitter = rng.normal(0, 0.5 / 3600, (2, n))
+    layout, edges = tmp_path / "layout", tmp_path / "edges"
+    write_band_layout(
+        layout,
+        {
+            "a": as_chunks(ra, dec, 20_000),
+            "b": as_chunks(ra + jitter[0], dec + jitter[1], 20_000),
+        },
+        band_height_deg=0.05,
+    )
+    build_edges_by_band(
+        layout, edges, radius_arcsec=2.0, dedupe_radius_arcsec={"a": 0.0, "b": 0.0}
+    )
+    index = resolve(read_edges(edges), EntitywiseCrossmatchConfig()).table
+    assert len(segment_names(edges)) > 100
+    peak = int(
+        subprocess.run(
+            [sys.executable, "-c", _PEAK_SCRIPT, edges, tmp_path / "i.parquet", "2048"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    assert pq.read_table(tmp_path / "i.parquet").equals(index, check_metadata=True)
+    # The old per-segment Parquet merge peaked at several times the index.
+    assert peak < index.nbytes / 2

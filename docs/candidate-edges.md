@@ -161,8 +161,9 @@ resolve_to_file(
 It resolves each segment on its own, optionally in parallel processes, and
 merges the per-segment indexes into the usual entity order: first present
 survey, then that survey's row. The file equals
-`resolve(read_edges(...), mode).table`, metadata included, while the merge
-holds only `batch_rows` rows of each segment at a time. `sort=False` skips the
+`resolve(read_edges(...), mode).table`, metadata included. The merge holds
+about `batch_rows` index rows at a time in total, however many segments there
+are, and writes the file in row groups of `batch_rows`. `sort=False` skips the
 merge and lists each segment's entities in segment order.
 
 For separate processes, such as a job array, `prepare_band_build` records the
