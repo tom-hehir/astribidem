@@ -29,8 +29,9 @@ from typing import Any
 
 import numpy as np
 import pyarrow as pa
+
+from astro_crossmatch.candidate_edges import CandidateEdges
 from astro_crossmatch.graph import build_global_graph
-from astro_crossmatch.inputs import ResolveInputs
 
 SUBSET_JOIN_POLICIES = (
     "mutual_nearest",
@@ -74,7 +75,7 @@ class CrossmatchModeConfig(ABC):
         """Entity semantics depend on every configured survey; joins do not."""
 
     @abstractmethod
-    def build(self, inputs: ResolveInputs) -> ModeResult: ...
+    def build(self, edges: CandidateEdges) -> ModeResult: ...
 
 
 def mode_to_mapping(mode: CrossmatchModeConfig) -> dict[str, Any]:
@@ -84,6 +85,11 @@ def mode_to_mapping(mode: CrossmatchModeConfig) -> dict[str, Any]:
         "class_path": f"{type(mode).__module__}.{type(mode).__qualname__}",
         "init_args": init_args,
     }
+
+
+def _row_column(survey: str) -> str:
+    """The output column carrying a survey's row positions."""
+    return f"{survey}/row_index"
 
 
 def _row_array(positions: np.ndarray, missing: np.ndarray | None = None) -> pa.Array:
@@ -208,10 +214,10 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
     def requires_all_surveys(self) -> bool:
         return False
 
-    def build(self, inputs: ResolveInputs) -> ModeResult:
+    def build(self, edges: CandidateEdges) -> ModeResult:
         matched: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
         for a, b in combinations(self.surveys, 2):
-            row_a, row_b, sep = inputs.oriented_edges(a, b)
+            row_a, row_b, sep = edges.oriented_edges(a, b)
             matched[(a, b)] = one_to_one_pairs(row_a, row_b, sep, self.policy)
 
         anchor = self.surveys[0]
@@ -236,8 +242,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
                 rows = {s: r[keep] for s, r in rows.items()}
 
         columns: dict[str, pa.Array] = {
-            inputs.row_column_name(name): _row_array(rows[name])
-            for name in self.surveys
+            _row_column(name): _row_array(rows[name]) for name in self.surveys
         }
         for a, b in combinations(self.surveys, 2):
             ka, va, sep = matched[(a, b)]
@@ -245,7 +250,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
             # the separation column (anchored policies can repeat b-rows, so
             # key on the a side, which is unique for every policy).
             pos = np.searchsorted(ka, rows[a])
-            columns[f"{a}__{b}{inputs.delimiter}separation_arcsec"] = pa.array(
+            columns[f"{a}__{b}/separation_arcsec"] = pa.array(
                 sep[np.clip(pos, 0, max(len(sep) - 1, 0))].astype(np.float32)
                 if len(sep)
                 else np.zeros(0, dtype=np.float32),
@@ -258,7 +263,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
             b"astro_crossmatch.match_index.surveys": _json_bytes(list(self.surveys)),
             b"astro_crossmatch.match_index.match_policy": self.policy.encode(),
             b"astro_crossmatch.match_index.pair_radius_arcsec": _json_bytes(
-                inputs.radius_metadata(combinations(self.surveys, 2))
+                edges.radius_metadata(combinations(self.surveys, 2))
             ),
         }
         table = pa.table(columns).replace_schema_metadata(metadata)
@@ -485,17 +490,17 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
         index = {name: i for i, name in enumerate(names)}
         return {index[name]: rank for rank, name in enumerate(priority)}
 
-    def build(self, inputs: ResolveInputs) -> ModeResult:
-        names = inputs.survey_names
+    def build(self, edges: CandidateEdges) -> ModeResult:
+        names = edges.survey_names
         n_surveys = len(names)
         selection = self.selection or EntitySelectionConfig()
         required_positions = selection.required_positions(names)
         graph = build_global_graph(
             names,
-            inputs.active_row_index,
+            {survey.name: survey.active_rows() for survey in edges.surveys},
             [
-                (p.survey_a, p.survey_b, p.row_a, p.row_b, p.sep_arcsec)
-                for p in inputs.pairs.values()
+                (p.survey_a, p.survey_b, p.row_a, p.row_b, p.separation_arcsec)
+                for p in edges.pairs.values()
             ],
         )
         clean = graph.clean()
@@ -608,9 +613,7 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
                 reason_blocks.append(np.array(reasons, dtype=np.int8))
 
         for i, name in enumerate(names):
-            disputed_rows = inputs.dedupe_disputed.get(
-                name, np.empty(0, dtype=np.int64)
-            )
+            disputed_rows = edges.survey(name).disputed_rows
             block = np.full((len(disputed_rows), n_surveys), _MISSING, dtype=np.int64)
             block[:, i] = disputed_rows
             residual_blocks.append(block)
@@ -645,7 +648,7 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
         arrays: dict[str, pa.Array] = {}
         for i, name in enumerate(names):
             positions = np.concatenate([clean_cols[name], residual[:, i]])
-            arrays[inputs.row_column_name(name)] = _row_array(
+            arrays[_row_column(name)] = _row_array(
                 positions, missing=positions == _MISSING
             )
         arrays["disputed_reason"] = pa.array(
@@ -653,13 +656,11 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
             pa.string(),
         )
 
-        n_dedupe_disputed = sum(
-            len(inputs.dedupe_disputed.get(name, ())) for name in names
-        )
+        n_dedupe_disputed = sum(survey.n_disputed for survey in edges.surveys)
         radius_entries = [
             {
                 "surveys": [a, b],
-                "radius_arcsec": inputs.pair_radius_arcsec[frozenset((a, b))],
+                "radius_arcsec": edges.pairs[frozenset((a, b))].radius_arcsec,
             }
             for a, b in combinations(names, 2)
         ]

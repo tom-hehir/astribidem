@@ -100,7 +100,7 @@ def build_global_graph(
     """Assemble the joint graph from per-pair edges in original positions.
 
     ``pair_edges`` entries are ``(survey_a, survey_b, row_a, row_b,
-    sep_arcsec)``. ``active_row_index`` arrays must be sorted ascending (they
+    separation_arcsec)``. ``active_row_index`` arrays must be sorted ascending (they
     are, by construction: positions of a boolean mask). The design caps at 63
     surveys (``survey_bits`` is a single int64 bitmask per component).
     """

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+
 from astro_crossmatch.edges import (
     build_pair_edges,
     dedupe_survey,
@@ -26,24 +27,24 @@ def test_dedupe_keeps_lowest_row_in_clean_pair():
     coords = _coords("s", ra_arcsec=[0.0, 0.1])
     outcome, active = dedupe_survey(coords, 0.5)
     assert active.tolist() == [True, False]
-    assert outcome.dropped_index.tolist() == [1]
-    assert outcome.keeper_index.tolist() == [0]
+    assert outcome.dropped_rows.tolist() == [1]
+    assert outcome.kept_rows.tolist() == [0]
     assert outcome.n_disputed == 0
 
 
 def test_dedupe_keeper_follows_row_order_not_position_on_sky():
     coords = _coords("s", ra_arcsec=[30.0, 0.1, 0.0])
     outcome, active = dedupe_survey(coords, 0.5)
-    assert outcome.dropped_index.tolist() == [2]
-    assert outcome.keeper_index.tolist() == [1]
+    assert outcome.dropped_rows.tolist() == [2]
+    assert outcome.kept_rows.tolist() == [1]
     assert active.tolist() == [True, True, False]
 
 
 def test_dedupe_drops_every_extra_copy_onto_one_kept_row():
     coords = _coords("s", ra_arcsec=[0.2, 0.0, 30.0, 0.1])
     outcome, active = dedupe_survey(coords, 0.5)
-    assert outcome.dropped_index.tolist() == [1, 3]
-    assert outcome.keeper_index.tolist() == [0, 0]
+    assert outcome.dropped_rows.tolist() == [1, 3]
+    assert outcome.kept_rows.tolist() == [0, 0]
     assert active.tolist() == [True, False, True, False]
 
 
@@ -53,7 +54,7 @@ def test_dedupe_flags_non_clique_chain_as_disputed():
     coords = _coords("s", ra_arcsec=[0.0, 0.45, 0.9])
     outcome, active = dedupe_survey(coords, 0.5)
     assert outcome.n_dropped == 0
-    assert outcome.disputed_index.tolist() == [0, 1, 2]
+    assert outcome.disputed_rows.tolist() == [0, 1, 2]
     assert not active.any()
 
 
@@ -80,6 +81,6 @@ def test_dedupe_converts_multiplicity_into_clean_match():
     a = _coords("a", ra_arcsec=[0.0, 0.05])
     b = _coords("b", ra_arcsec=[0.02])
     outcome, active_a = dedupe_survey(a, 0.5)
-    assert outcome.dropped_index.tolist() == [1]
+    assert outcome.dropped_rows.tolist() == [1]
     edges = build_pair_edges(a, b, active_a, np.ones(1, dtype=bool), 1.0)
     assert edges.row_a.tolist() == [0]
