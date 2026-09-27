@@ -145,9 +145,10 @@ the same edges under several modes, save them, or stream them to disk while
 building, use `build_edges`, `resolve`, `write_edges`, `read_edges` and
 `build_edges_to_directory`; `audit_edges` summarises dedupe, pair and
 component statistics. See [candidate edges](docs/candidate-edges.md).
-Coordinates and KD-trees are always held in memory. The
-[banded edge build design](docs/design/banded-edge-builds.md) describes the
-planned route for catalogs larger than memory.
+For catalogs larger than memory, `write_band_layout` and `build_edges_by_band`
+build the same edges one declination band at a time; see
+[candidate edges](docs/candidate-edges.md#build-edges-band-by-band) and the
+[banded edge build design](docs/design/banded-edge-builds.md).
 
 ## Design proposals
 
@@ -162,7 +163,8 @@ The [banded edge build design](docs/design/banded-edge-builds.md) records the
 agreed plan for catalogs larger than memory: declination bands with a margin,
 deferral of groups that cross band boundaries to a sweep over the boundaries,
 and saved edges made of self-contained segments. It also records every option
-considered and why it was accepted or rejected. It is not yet implemented.
+considered and why it was accepted or rejected. Its first three stages are
+implemented.
 
 ## Development
 

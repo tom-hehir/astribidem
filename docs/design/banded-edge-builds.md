@@ -1,6 +1,7 @@
 # Banded edge builds for catalogs larger than memory
 
-Status: agreed design, recorded 2026-09-27; not yet implemented. This note
+Status: agreed design, recorded 2026-09-27. Stages 1–3 below are implemented
+(`astro_crossmatch.regions`, `astro_crossmatch.banded`); stage 4 follows. This note
 records the plan for building candidate edges and resolving them when survey
 catalogs do not fit in memory, together with every option considered and the
 reason each was accepted or rejected. The implementation stages at the end
