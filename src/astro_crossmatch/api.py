@@ -134,8 +134,7 @@ def crossmatch(
     result = mode.build(inputs)
     provenance = {
         "surveys": [
-            {"name": name, "dedupe_radius_arcsec": dedupe_radii[name]}
-            for name in names
+            {"name": name, "dedupe_radius_arcsec": dedupe_radii[name]} for name in names
         ],
         "pair_radius_arcsec": [
             {"surveys": [a, b], "radius_arcsec": radii[frozenset((a, b))]}

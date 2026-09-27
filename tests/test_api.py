@@ -20,9 +20,7 @@ from astro_crossmatch import (
 
 def survey(name, offsets):
     offsets = np.asarray(offsets, dtype=float)
-    return survey_coords_from_arrays(
-        name, 180 + offsets / 3600, np.zeros(len(offsets))
-    )
+    return survey_coords_from_arrays(name, 180 + offsets / 3600, np.zeros(len(offsets)))
 
 
 def resolve(surveys, *, mode=None, **kwargs):
@@ -160,9 +158,7 @@ def test_invalid_pair_override_is_rejected(override):
 
 def test_unknown_mode_survey_is_rejected_before_matching():
     with pytest.raises(ValueError, match="unknown surveys"):
-        resolve(
-            [survey("a", [0])], mode=DegenerateCrossmatchConfig(surveys=["a", "b"])
-        )
+        resolve([survey("a", [0])], mode=DegenerateCrossmatchConfig(surveys=["a", "b"]))
 
 
 def test_no_upstream_or_storage_dependencies_are_imported():

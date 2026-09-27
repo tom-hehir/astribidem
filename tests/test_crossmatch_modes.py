@@ -134,7 +134,12 @@ def test_entitywise_clean_pair_and_singletons():
     result = EntitywiseCrossmatchConfig().build(inputs)
     table = result.table
     assert table.num_rows == 3
-    rows = set(zip(table.column("a/row_index").to_pylist(), table.column("b/row_index").to_pylist()))
+    rows = set(
+        zip(
+            table.column("a/row_index").to_pylist(),
+            table.column("b/row_index").to_pylist(),
+        )
+    )
     assert rows == {(0, 0), (1, None), (None, 1)}
     assert table.column("disputed_reason").to_pylist() == [None, None, None]
     assert result.summary["n_clean_multi_survey"] == 1
@@ -185,7 +190,12 @@ def test_entitywise_split_resolver_partitions_chain():
     result = EntitywiseCrossmatchConfig(resolver="split").build(inputs)
     table = result.table
     assert result.summary["n_resolved_groups"] == 2
-    rows = set(zip(table.column("a/row_index").to_pylist(), table.column("b/row_index").to_pylist()))
+    rows = set(
+        zip(
+            table.column("a/row_index").to_pylist(),
+            table.column("b/row_index").to_pylist(),
+        )
+    )
     assert rows == {(0, 0), (1, None)}
     assert table.column("disputed_reason").to_pylist() == [None, None]
 
