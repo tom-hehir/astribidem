@@ -320,3 +320,22 @@ def test_non_numeric_catalog_coordinates_are_rejected():
             links={"b": SpatialLink(1)},
             dedupe_radius_arcsec={"a": 0, "b": 0},
         )
+
+
+def test_low_precision_column_warns_once_through_every_conversion(recwarn):
+    table = pa.table(
+        {
+            "id": [1],
+            "ra": pa.array([180.0], pa.float32()),
+            "dec": pa.array([0.0], pa.float64()),
+        }
+    )
+    match_hub_and_spoke(
+        {"a": table, "b": catalog([2], offsets=[0.1])},
+        anchor="a",
+        links={"b": SpatialLink(1)},
+        dedupe_radius_arcsec={"a": 0, "b": 0},
+    )
+    assert [str(w.message)[:28] for w in recwarn.list] == [
+        "survey 'a': ra is 32-bit flo"
+    ]

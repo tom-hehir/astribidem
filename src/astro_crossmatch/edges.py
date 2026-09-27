@@ -19,7 +19,12 @@ from astro_crossmatch.graph import (
     component_sizes_and_edge_counts,
     connected_components,
 )
-from astro_crossmatch.kernel import CatalogKernel, radec_to_xyz, resolve_workers
+from astro_crossmatch.kernel import (
+    CatalogKernel,
+    float64_coordinates,
+    radec_to_xyz,
+    resolve_workers,
+)
 
 
 @dataclass(frozen=True)
@@ -40,19 +45,17 @@ def survey_coords_from_arrays(
 ) -> SurveyCoords:
     """Build coordinates from RA/Dec degree arrays.
 
-    Coordinates are converted to float64 before any calculation. Floating
-    point inputs less precise than float64 trigger a ``UserWarning``, because
-    their rounding already limits positional accuracy.
+    Coordinates become float64 before anything else; see
+    ``kernel.float64_coordinates``.
     """
-    ra = np.asarray(ra)
-    dec = np.asarray(dec)
+    ra, dec = float64_coordinates(ra, dec, name=name)
     if ra.ndim != 1 or dec.ndim != 1:
         raise ValueError(f"survey {name!r}: ra/dec must be 1-D")
     if len(ra) != len(dec):
         raise ValueError(
             f"survey {name!r}: ra/dec shapes differ: {ra.shape} vs {dec.shape}"
         )
-    return SurveyCoords(name=name, xyz=radec_to_xyz(ra, dec, name=name))
+    return SurveyCoords(name=name, xyz=radec_to_xyz(ra, dec))
 
 
 def dedupe_survey(
