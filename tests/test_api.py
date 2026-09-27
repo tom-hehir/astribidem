@@ -182,3 +182,11 @@ def test_geometry_adapter_warns_on_low_precision_coordinates():
         dedupe_and_crossmatch_radec(
             [low, high], 1.0, names=["a", "b"], dedupe_radii_arcsec=[0.0, 0.0]
         )
+
+
+def test_saved_index_keeps_its_summary(tmp_path):
+    result = resolve([survey("a", [0, 20]), survey("b", [0.2])])
+    path = tmp_path / "index.parquet"
+    pq.write_table(result.table, path)
+    metadata = pq.read_table(path).schema.metadata
+    assert json.loads(metadata[b"astro_crossmatch.summary"]) == result.summary
