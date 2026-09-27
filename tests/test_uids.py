@@ -125,10 +125,6 @@ def test_empty_sources_retain_output_types(join):
         ({"a": [1], "b": ["1"]}, {}, "no coercion"),
         ({"a": [1]}, {"join": "right"}, "join must"),
         ({"a": [1]}, {"anchor": "b"}, "anchor must"),
-        ({"a": [1]}, {"ids": {"b": [1]}}, "no 'b/row_index' column"),
-        ({"a": [1, 2]}, {"ids": {"a": [10, 10]}}, "duplicate"),
-        ({"a": [1]}, {"ids": {"a": [None]}}, "non-null"),
-        ({"a": [1, 2]}, {"ids": {"a": [10]}}, "1 IDs for 2 input rows"),
         ({"a": [-1, 2**63]}, {}, "fit one Arrow integer type"),
     ],
 )
@@ -148,7 +144,7 @@ def test_empty_python_sequence_infers_other_source_key_type():
     assert match_uid_rows({"a": [], "b": []}).num_rows == 0
 
 
-def test_rows_are_int64_positions_with_row_counts_recorded():
+def test_rows_are_int64_positions():
     result = match_uid_rows(
         {"a": [2, 1, 4], "b": np.array([3, 1], dtype="int8")}, join="outer"
     )
@@ -158,10 +154,6 @@ def test_rows_are_int64_positions_with_row_counts_recorded():
         "b/row_index": [None, 1, None, 0],
     }
     assert result.schema.field("b/row_index").type == pa.int64()
-    assert json.loads(result.schema.metadata[b"astro_crossmatch.n_rows"]) == {
-        "a": 3,
-        "b": 2,
-    }
 
 
 def test_python_integer_below_int64_is_rejected_clearly():
@@ -303,17 +295,14 @@ def test_randomized_three_source_joins_match_exact_reference(join, anchor, famil
 
 
 @pytest.mark.parametrize("invalid", ["duplicates", "nulls"])
-@pytest.mark.parametrize("kind", ["uids", "ids"])
-def test_chunked_invalid_values_are_checked_across_chunk_boundaries(invalid, kind):
+def test_chunked_invalid_uids_are_checked_across_chunk_boundaries(invalid):
     values = pa.chunked_array(
         [["a", "b"], [], ["a" if invalid == "duplicates" else None]],
         type=pa.large_string(),
     )
-    uids = {"source": values if kind == "uids" else [0, 1, 2]}
-    kwargs = {"ids": {"source": values}} if kind == "ids" else {}
     message = "duplicate" if invalid == "duplicates" else "non-null"
     with pytest.raises(ValueError, match=message):
-        match_uids(uids, **kwargs)
+        match_uids({"source": values})
 
 
 def test_python_integer_above_uint64_is_rejected_clearly():

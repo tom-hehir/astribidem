@@ -12,32 +12,32 @@ import pyarrow as pa
 import pyarrow.compute as pc
 
 
-def _identifiers(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
-    """Keep integer identity exact, including unsigned values above int64."""
+def _as_arrow(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
+    """Arrow values with exact integer identity, including uint64 above int64."""
     if isinstance(values, (pa.Array, pa.ChunkedArray)):
-        array = values
-    else:
-        # Arrow infers Python integers as int64. Explicitly select uint64 for
-        # ordinary integer sequences that exceed int64, without a NumPy/float
-        # round trip. Typed NumPy and pandas inputs retain their own dtype.
-        if isinstance(values, (list, tuple)) and all(
-            isinstance(value, Integral) and not isinstance(value, bool)
-            for value in values
-        ):
-            dtype = pa.int64()
-            if values and min(values) < -(2**63):
+        return values
+    # Arrow infers Python integers as int64. Explicitly select uint64 for
+    # ordinary integer sequences that exceed int64, without a NumPy/float
+    # round trip. Typed NumPy and pandas inputs retain their own dtype.
+    if isinstance(values, (list, tuple)) and all(
+        isinstance(value, Integral) and not isinstance(value, bool) for value in values
+    ):
+        dtype = pa.int64()
+        if values and min(values) < -(2**63):
+            raise ValueError(f"source {name!r}: {kind} must fit one Arrow integer type")
+        if values and max(values) > 2**63 - 1:
+            if min(values) < 0 or max(values) > 2**64 - 1:
                 raise ValueError(
                     f"source {name!r}: {kind} must fit one Arrow integer type"
                 )
-            if values and max(values) > 2**63 - 1:
-                if min(values) < 0 or max(values) > 2**64 - 1:
-                    raise ValueError(
-                        f"source {name!r}: {kind} must fit one Arrow integer type"
-                    )
-                dtype = pa.uint64()
-            array = pa.array(values, type=dtype)
-        else:
-            array = pa.array(values, from_pandas=True)
+            dtype = pa.uint64()
+        return pa.array(values, type=dtype)
+    return pa.array(values, from_pandas=True)
+
+
+def _identifiers(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
+    """Unique, non-null integer or string values, converted exactly."""
+    array = _as_arrow(values, name=name, kind=kind)
     if array.null_count:
         raise ValueError(f"source {name!r}: {kind} must be non-null")
     if not (
@@ -209,9 +209,6 @@ def match_uids(
     metadata = {
         b"astro_crossmatch.resolved_config": json.dumps(
             provenance, sort_keys=True, separators=(",", ":"), allow_nan=False
-        ).encode(),
-        b"astro_crossmatch.n_rows": json.dumps(
-            {name: len(keys[name]) for name in names}, sort_keys=True
-        ).encode(),
+        ).encode()
     }
     return pa.table(columns).replace_schema_metadata(metadata)
