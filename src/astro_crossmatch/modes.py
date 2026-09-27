@@ -87,6 +87,21 @@ def mode_to_mapping(mode: CrossmatchModeConfig) -> dict[str, Any]:
     }
 
 
+def entity_order(membership: np.ndarray) -> np.ndarray:
+    """Order entities by their first present survey, then that survey's row.
+
+    ``membership`` holds one row per entity and one column per survey, in
+    survey order, with ``-1`` where a survey is absent. Every entity has at
+    least one present survey, so the order is total.
+    """
+    if len(membership) == 0:
+        return np.empty(0, dtype=np.int64)
+    present = membership != _MISSING
+    first = np.argmax(present, axis=1)
+    row = membership[np.arange(len(membership)), first]
+    return np.lexsort((row, first))
+
+
 def _row_column(survey: str) -> str:
     """The output column carrying a survey's row positions."""
     return f"{survey}/row_index"
@@ -645,16 +660,28 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
             residual = residual[keep]
             reason_codes = reason_codes[keep]
 
+        membership = (
+            np.column_stack(
+                [
+                    np.concatenate([clean_cols[name], residual[:, i]])
+                    for i, name in enumerate(names)
+                ]
+            )
+            if n_surveys
+            else np.empty((0, 0), dtype=np.int64)
+        )
+        codes = np.concatenate(
+            [np.full(n_selected_clean, _CLEAN, dtype=np.int8), reason_codes]
+        )
+        order = entity_order(membership)
+        membership, codes = membership[order], codes[order]
         arrays: dict[str, pa.Array] = {}
         for i, name in enumerate(names):
-            positions = np.concatenate([clean_cols[name], residual[:, i]])
+            positions = membership[:, i]
             arrays[_row_column(name)] = _row_array(
                 positions, missing=positions == _MISSING
             )
-        arrays["disputed_reason"] = pa.array(
-            [_REASON_CLEAN] * n_selected_clean + list(reason_values[reason_codes]),
-            pa.string(),
-        )
+        arrays["disputed_reason"] = pa.array(list(reason_values[codes]), pa.string())
 
         n_dedupe_disputed = sum(survey.n_disputed for survey in edges.surveys)
         radius_entries = [

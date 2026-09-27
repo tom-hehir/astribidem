@@ -48,7 +48,7 @@ def _survey_audit(survey: DedupeOutcome) -> dict[str, Any]:
         "name": survey.name,
         "n_rows": survey.n_rows,
         "dedupe_radius_arcsec": survey.dedupe_radius_arcsec,
-        "n_active": survey.n_rows - survey.n_dropped - survey.n_disputed,
+        "n_active": survey.n_active,
         "n_dropped": survey.n_dropped,
         "n_disputed": survey.n_disputed,
         "n_duplicate_groups": len(dropped_per_group),
@@ -60,10 +60,7 @@ def _survey_audit(survey: DedupeOutcome) -> dict[str, Any]:
 
 def _pair_audit(edges: CandidateEdges, pair) -> dict[str, Any]:
     active = {
-        name: edges.survey(name).n_rows
-        - edges.survey(name).n_dropped
-        - edges.survey(name).n_disputed
-        for name in (pair.survey_a, pair.survey_b)
+        name: edges.survey(name).n_active for name in (pair.survey_a, pair.survey_b)
     }
     rows_a, counts_a = np.unique(pair.row_a, return_counts=True)
     rows_b, counts_b = np.unique(pair.row_b, return_counts=True)

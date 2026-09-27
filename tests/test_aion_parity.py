@@ -3,7 +3,8 @@
 ``fixtures/aion_parity.npz`` holds synthetic catalogs and the indexes AION-2
 built from them; ``fixtures/generate_aion_parity.py`` records it. Rows here are
 AION-2's ``row_index`` values, so every column must agree element for element.
-Resolving saved, reloaded or streamed edges must give the same indexes, and
+Entities are compared in this package's order (first present survey, then its
+row). Resolving saved, reloaded or streamed edges must give the same indexes, and
 the edge audit must agree with AION-2's pair statistics and component census.
 """
 
@@ -27,6 +28,7 @@ from astro_crossmatch import (
     survey_coords_from_arrays,
     write_edges,
 )
+from astro_crossmatch.modes import entity_order
 
 FIXTURES = Path(__file__).with_name("fixtures")
 sys.path.insert(0, str(FIXTURES))
@@ -39,6 +41,18 @@ from aion_parity_cases import (
 )
 
 EXPECTED = dict(np.load(FIXTURES / "aion_parity.npz"))
+
+
+def in_entity_order(columns):
+    """AION-2's recorded rows, reordered by first present survey then row.
+
+    AION-2 lists entitywise entities in three blocks; this package orders
+    every index by its entities' first present survey and that survey's row.
+    The entities themselves must agree exactly.
+    """
+    rows = [values for name, values in columns.items() if name.endswith("/row_index")]
+    order = entity_order(np.column_stack(rows))
+    return {name: values[order] for name, values in columns.items()}
 
 
 def mode(kind, arguments):
@@ -90,11 +104,13 @@ def test_reproduces_aion_output(surveys, edge_sources, label, source):
         table = crossmatch(surveys, mode=mode(kind, arguments), **SETTINGS).table
     else:
         table = resolve(edge_sources[source], mode(kind, arguments)).table
-    expected = {
-        key.removeprefix(f"{label}/"): value
-        for key, value in EXPECTED.items()
-        if key.startswith(f"{label}/")
-    }
+    expected = in_entity_order(
+        {
+            key.removeprefix(f"{label}/"): value
+            for key, value in EXPECTED.items()
+            if key.startswith(f"{label}/")
+        }
+    )
     assert table.column_names == list(expected)
     for column, values in expected.items():
         actual = table[column]
