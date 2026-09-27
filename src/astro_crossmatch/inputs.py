@@ -1,11 +1,9 @@
 """The seam between the edge substrate and the mode builders.
 
-``ResolveInputs`` carries everything a mode consumes, expressed in internal
-dense positions (0..n-1 per survey, in load order). Stable catalog IDs — the
-only vocabulary that leaves this process — are attached alongside so the mode
-builders can translate positions to ID values at the output boundary. See
-``docs/crossmatching.md`` for why the on-disk index carries IDs, never
-positions.
+``ResolveInputs`` carries everything a mode consumes, expressed in row
+positions (0..n-1 per survey, in input order). Mode builders emit those rows
+as ``<survey>/row_index`` columns; ``astro_crossmatch.rows_to_ids`` maps them
+to caller IDs afterwards.
 """
 
 from __future__ import annotations
@@ -32,11 +30,9 @@ class PairEdges:
 class ResolveInputs:
     """Everything a mode builder consumes.
 
-    ``active_row_index`` / ``dedupe_disputed`` / pair rows are positional
-    (ascending, per survey load order). ``ids[name]`` is the full
-    position-aligned stable-ID array for each survey; ``id_columns[name]`` its
-    column name. ``delimiter`` joins survey names with column names in the
-    output schema.
+    ``active_row_index`` / ``dedupe_disputed`` / pair rows are row positions
+    (ascending, per survey input order). ``delimiter`` joins survey names with
+    column names in the output schema.
     """
 
     survey_names: tuple[str, ...]
@@ -44,8 +40,6 @@ class ResolveInputs:
     dedupe_disputed: dict[str, np.ndarray]
     pairs: dict[frozenset[str], PairEdges]
     pair_radius_arcsec: dict[frozenset[str], float]
-    ids: dict[str, np.ndarray]
-    id_columns: dict[str, str]
     delimiter: str = "/"
 
     def oriented_edges(
@@ -57,9 +51,9 @@ class ResolveInputs:
             return pair.row_a, pair.row_b, pair.sep_arcsec
         return pair.row_b, pair.row_a, pair.sep_arcsec
 
-    def id_column_name(self, survey: str) -> str:
-        """The output column carrying this survey's stable IDs."""
-        return f"{survey}{self.delimiter}{self.id_columns[survey]}"
+    def row_column_name(self, survey: str) -> str:
+        """The output column carrying this survey's row positions."""
+        return f"{survey}{self.delimiter}row_index"
 
     def radius_metadata(self, pair_names) -> list[dict[str, Any]]:
         entries = []

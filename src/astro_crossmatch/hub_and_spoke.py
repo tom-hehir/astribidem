@@ -50,8 +50,8 @@ class SpatialLink:
             raise ValueError(f"unknown spatial policy: {self.policy!r}")
 
 
-def _spatial_input(name: str, table: pa.Table, identifiers: pa.ChunkedArray):
-    """Use ID order ranks so spatial matching never sees Python string objects."""
+def _spatial_input(name: str, table: pa.Table):
+    """Coordinates for spatial matching, in the catalog's row order."""
     if not {"ra", "dec"} <= set(table.column_names):
         raise ValueError(f"spatial catalog {name!r} requires ra and dec columns")
     coordinates = []
@@ -63,15 +63,7 @@ def _spatial_input(name: str, table: pa.Table, identifiers: pa.ChunkedArray):
         if not np.isfinite(numeric).all():
             raise ValueError(f"catalog {name!r}: {column} must be finite")
         coordinates.append(numeric)
-    # An order-preserving integer surrogate retains the existing spatial
-    # dedupe rule: keep the observation with the lowest original stable ID.
-    rank_to_row = pc.cast(pc.sort_indices(identifiers), pa.int64())
-    ranks = np.empty(len(identifiers), dtype=np.int64)
-    ranks[rank_to_row.to_numpy(zero_copy_only=True)] = np.arange(
-        len(identifiers), dtype=np.int64
-    )
-    survey = survey_coords_from_arrays(name, ranks, *coordinates)
-    return survey, rank_to_row
+    return survey_coords_from_arrays(name, *coordinates)
 
 
 def match_hub_and_spoke(
@@ -102,7 +94,9 @@ def match_hub_and_spoke(
 
     Output contains ``entity_id`` and original typed ``<source>/id`` columns.
     Anchored spatial policies may repeat counterpart IDs. Keys remain in native
-    Arrow buffers; only numeric coordinates, ranks and row positions use NumPy.
+    Arrow buffers; only numeric coordinates and row positions use NumPy. Spatial
+    dedupe keeps the lowest row of each duplicate group, so it follows the
+    catalog's row order.
     """
     if not isinstance(catalogs, Mapping) or len(catalogs) < 2:
         raise ValueError("catalogs must map at least two sources to Arrow tables")
@@ -136,7 +130,6 @@ def match_hub_and_spoke(
 
     identifiers = {}
     surveys = {}
-    rank_to_row = {}
     for name, table in catalogs.items():
         if not isinstance(table, pa.Table):
             raise TypeError(f"catalog {name!r} must be a pyarrow.Table")
@@ -146,9 +139,7 @@ def match_hub_and_spoke(
             raise ValueError(f"catalog {name!r} requires an id column")
         identifiers[name] = _identifiers(table["id"], name=name, kind="IDs")
         if name in spatial:
-            surveys[name], rank_to_row[name] = _spatial_input(
-                name, table, identifiers[name]
-            )
+            surveys[name] = _spatial_input(name, table)
 
     rows = {anchor: pa.array(np.arange(len(identifiers[anchor]), dtype=np.int64))}
     link_provenance = {}
@@ -198,10 +189,7 @@ def match_hub_and_spoke(
                 workers=workers,
             )
             pair = result.table
-            pair_rows = {
-                source: pc.take(rank_to_row[source], pair[f"{source}/id"])
-                for source in pair_names
-            }
+            pair_rows = {source: pair[f"{source}/row_index"] for source in pair_names}
             link_provenance[name] = {
                 "method": "sky",
                 "radius_arcsec": link.radius_arcsec,
@@ -223,7 +211,7 @@ def match_hub_and_spoke(
         rows[name] = pc.take(pair_rows[name], pc.filter(positions, keep))
         del pair, pair_rows, positions, keep
 
-    del surveys, rank_to_row
+    del surveys
 
     configuration = {
         "method": "hub_and_spoke",

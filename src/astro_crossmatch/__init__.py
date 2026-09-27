@@ -1,6 +1,6 @@
-"""Exact astronomical crossmatching and stable-ID entity indexes."""
+"""Exact astronomical crossmatching with row-position entity indexes."""
 
-from astro_crossmatch.api import crossmatch
+from astro_crossmatch.api import crossmatch, rows_to_ids
 from astro_crossmatch.edges import SurveyCoords, survey_coords_from_arrays
 from astro_crossmatch.hub_and_spoke import SpatialLink, UIDLink, match_hub_and_spoke
 from astro_crossmatch.kernel import CatalogKernel
@@ -26,5 +26,6 @@ __all__ = [
     "crossmatch",
     "match_hub_and_spoke",
     "match_uids",
+    "rows_to_ids",
     "survey_coords_from_arrays",
 ]

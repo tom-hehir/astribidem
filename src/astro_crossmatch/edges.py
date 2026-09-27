@@ -1,7 +1,7 @@
 """Storage-independent coordinate, deduplication, and complete-edge primitives.
 
-Adapted from Astral Projections. Stable IDs accompany internal positional
-indices and are emitted only at the resolution boundary.
+Adapted from Astral Projections. Everything here works in row positions: row
+``i`` of a survey is the ``i``-th coordinate passed in.
 """
 
 from __future__ import annotations
@@ -21,34 +21,30 @@ from astro_crossmatch.kernel import CatalogKernel, radec_to_xyz
 
 @dataclass(frozen=True)
 class SurveyCoords:
-    """One survey's stable IDs plus unit sky vectors, position-aligned."""
+    """One survey's unit sky vectors; row ``i`` is ``xyz[i]``."""
 
     name: str
-    ids: np.ndarray
     xyz: np.ndarray
 
     def __len__(self) -> int:
-        return len(self.ids)
+        return len(self.xyz)
 
 
 def survey_coords_from_arrays(
     name: str,
-    ids: np.ndarray,
     ra: np.ndarray,
     dec: np.ndarray,
 ) -> SurveyCoords:
-    """Build coordinates from ID and RA/Dec degree arrays."""
-    ids = np.asarray(ids)
+    """Build coordinates from RA/Dec degree arrays."""
     ra = np.asarray(ra, dtype=np.float64)
     dec = np.asarray(dec, dtype=np.float64)
-    if ids.ndim != 1 or ra.ndim != 1 or dec.ndim != 1:
-        raise ValueError(f"survey {name!r}: id/ra/dec must be 1-D")
-    if not (len(ids) == len(ra) == len(dec)):
+    if ra.ndim != 1 or dec.ndim != 1:
+        raise ValueError(f"survey {name!r}: ra/dec must be 1-D")
+    if len(ra) != len(dec):
         raise ValueError(
-            f"survey {name!r}: id/ra/dec shapes differ: "
-            f"{ids.shape} vs {ra.shape} vs {dec.shape}"
+            f"survey {name!r}: ra/dec shapes differ: {ra.shape} vs {dec.shape}"
         )
-    return SurveyCoords(name=name, ids=ids, xyz=radec_to_xyz(ra, dec))
+    return SurveyCoords(name=name, xyz=radec_to_xyz(ra, dec))
 
 
 @dataclass(frozen=True)
@@ -79,10 +75,9 @@ def dedupe_survey(
 
     Within-radius components that are cliques are duplicates by the physical
     argument (below the survey's resolution floor, two rows cannot be two
-    resolved objects): keep the row with the **lowest stable ID**, drop the
-    rest — an order-independent deterministic rule, unlike AION-2's
-    lowest-row-index keeper, because these inputs have no canonical row
-    order. Non-clique components (chains from shredding, flanking
+    resolved objects): keep the **lowest row**, drop the rest. The kept row
+    therefore depends on input order; sort the inputs first when that order
+    is not meaningful. Non-clique components (chains from shredding, flanking
     geometries) are disputed: every member is flagged and excluded from
     cross-survey matching.
 
@@ -116,28 +111,19 @@ def dedupe_survey(
     clique_member = is_clique[labels] & multi
     disputed = ~is_clique[labels] & multi
 
-    # Keeper per component = the member whose ID sorts first. Rank IDs once
-    # (dtype-agnostic: works for integer and string IDs alike), then take the
-    # component-wise minimum rank.
-    id_rank = np.empty(n, dtype=np.int64)
-    id_rank[np.argsort(coords.ids, kind="stable")] = np.arange(n, dtype=np.int64)
-    n_components = len(sizes)
-    keeper_rank = np.full(n_components, n, dtype=np.int64)
-    np.minimum.at(keeper_rank, labels, id_rank)
-    dropped = clique_member & (id_rank != keeper_rank[labels])
+    # Keeper per component = its lowest row.
+    keeper = np.full(len(sizes), n, dtype=np.int64)
+    np.minimum.at(keeper, labels, np.arange(n, dtype=np.int64))
+    dropped = clique_member & (np.arange(n) != keeper[labels])
 
     active[dropped] = False
     active[disputed] = False
-
-    # Map each dropped row to its keeper: invert ranks back to positions.
-    rank_to_position = np.argsort(id_rank, kind="stable")
-    keeper_position = rank_to_position[keeper_rank[labels[dropped]]]
 
     outcome = DedupeOutcome(
         survey=coords.name,
         radius_arcsec=radius_arcsec,
         dropped_index=np.flatnonzero(dropped),
-        keeper_index=keeper_position,
+        keeper_index=keeper[labels[dropped]],
         disputed_index=np.flatnonzero(disputed),
     )
     return outcome, active

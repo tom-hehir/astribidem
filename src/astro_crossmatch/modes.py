@@ -10,10 +10,9 @@ lifts the degeneracy — the exactly-once outer-join over all configured
 surveys, with absent rows represented by nulls and disputed rows handled by
 the configured disposition.
 
-Index columns carry **stable catalog IDs** (``<survey>/<id_column>``), never
-positions: the inputs are HATS/parquet catalogs whose row order is not a
-stable concept, so an ID is the only value that means the same thing in the
-index and in the payload catalogs. Positions exist only inside the build.
+Index columns carry **row positions** (``<survey>/row_index``): row ``i`` of a
+survey is the ``i``-th coordinate the caller passed in, and a null marks an
+absent survey. ``astro_crossmatch.rows_to_ids`` maps rows to caller IDs.
 
 Pass a mode instance to ``astro_crossmatch.crossmatch``. Mode configuration
 is recorded in the resulting Arrow schema metadata.
@@ -87,26 +86,9 @@ def mode_to_mapping(mode: CrossmatchModeConfig) -> dict[str, Any]:
     }
 
 
-def _id_array(
-    ids: np.ndarray, positions: np.ndarray, missing: np.ndarray | None = None
-) -> pa.Array:
-    """Positions -> stable-ID Arrow array; ``missing`` marks null slots.
-
-    Masked positions are looked up at 0 merely to stay in bounds — the values
-    are never serialized (Arrow stores the null mask).
-    """
-    if missing is None:
-        return pa.array(ids[positions])
-    if len(ids) == 0 and np.all(missing):
-        # An entirely empty survey is absent from every entity. There is no
-        # position zero to use as the ordinary masked lookup placeholder.
-        return pa.nulls(len(positions), type=pa.array(ids).type)
-    values = ids[np.where(missing, 0, positions)]
-    if values.dtype == object:
-        values = values.copy()
-        values[missing] = None
-        return pa.array(values)
-    return pa.array(values, mask=missing)
+def _row_array(positions: np.ndarray, missing: np.ndarray | None = None) -> pa.Array:
+    """Row positions -> int64 Arrow array; ``missing`` marks null slots."""
+    return pa.array(positions, pa.int64(), mask=missing)
 
 
 # --- one-to-one policy reductions over a pair's edges -----------------------
@@ -254,7 +236,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
                 rows = {s: r[keep] for s, r in rows.items()}
 
         columns: dict[str, pa.Array] = {
-            inputs.id_column_name(name): _id_array(inputs.ids[name], rows[name])
+            inputs.row_column_name(name): _row_array(rows[name])
             for name in self.surveys
         }
         for a, b in combinations(self.surveys, 2):
@@ -274,9 +256,6 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
         metadata = {
             b"astro_crossmatch.match_index.mode": b"degenerate",
             b"astro_crossmatch.match_index.surveys": _json_bytes(list(self.surveys)),
-            b"astro_crossmatch.match_index.id_columns": _json_bytes(
-                {name: inputs.id_columns[name] for name in self.surveys}
-            ),
             b"astro_crossmatch.match_index.match_policy": self.policy.encode(),
             b"astro_crossmatch.match_index.pair_radius_arcsec": _json_bytes(
                 inputs.radius_metadata(combinations(self.surveys, 2))
@@ -666,8 +645,8 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
         arrays: dict[str, pa.Array] = {}
         for i, name in enumerate(names):
             positions = np.concatenate([clean_cols[name], residual[:, i]])
-            arrays[inputs.id_column_name(name)] = _id_array(
-                inputs.ids[name], positions, missing=positions == _MISSING
+            arrays[inputs.row_column_name(name)] = _row_array(
+                positions, missing=positions == _MISSING
             )
         arrays["disputed_reason"] = pa.array(
             [_REASON_CLEAN] * n_selected_clean + list(reason_values[reason_codes]),
@@ -686,9 +665,6 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
         ]
         metadata = {
             b"astro_crossmatch.entity_index.surveys": _json_bytes(list(names)),
-            b"astro_crossmatch.entity_index.id_columns": _json_bytes(
-                {name: inputs.id_columns[name] for name in names}
-            ),
             b"astro_crossmatch.entity_index.resolver": self.resolver.encode(),
             b"astro_crossmatch.entity_index.disputed": self.disputed.encode(),
             b"astro_crossmatch.entity_index.size_cap": str(self.size_cap).encode(),
