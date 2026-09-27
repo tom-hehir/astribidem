@@ -16,7 +16,7 @@ from astro_crossmatch.api import crossmatch
 from astro_crossmatch.edges import survey_coords_from_arrays
 from astro_crossmatch.kernel import float64_coordinates, resolve_workers
 from astro_crossmatch.modes import SUBSET_JOIN_POLICIES, DegenerateCrossmatchConfig
-from astro_crossmatch.uids import _identifiers, match_uids
+from astro_crossmatch.uids import match_uids
 
 
 def _radius(value: float, *, allow_zero: bool = False) -> float:
@@ -85,9 +85,8 @@ def match_hub_and_spoke(
     Return the inner intersection in anchor input order; every link must
     succeed, with no spoke-to-spoke tests or groups lacking the anchor.
 
-    Each table requires unique, non-null integer or string ``id`` values. UID
-    links use ``uid`` when present, otherwise ``id``. Spatial participants need
-    ``ra`` and ``dec`` in degrees. ``links`` names every non-anchor source;
+    UID links use each table's ``uid`` column when present, otherwise ``id``.
+    Spatial participants need ``ra`` and ``dec`` in degrees. ``links`` names every non-anchor source;
     explicit dedupe radii name exactly the anchor and its spatial counterparts
     (or an empty mapping when there are no spatial links).
 
@@ -97,8 +96,9 @@ def match_hub_and_spoke(
     counterparts need not match each other. This differs from
     the all-pairs contract of an N-survey spatial subset join.
 
-    Output contains ``entity_id`` and original typed ``<source>/id`` columns.
-    Anchored spatial policies may repeat counterpart IDs. Keys remain in native
+    Output contains ``entity_id`` and an int64 ``<source>/row_index`` column per
+    table: row ``i`` is the table's ``i``-th row. Use ``rows_to_ids`` to map rows
+    to IDs. Anchored spatial policies may repeat counterpart rows. Keys remain in native
     Arrow buffers; only numeric coordinates and row positions use NumPy. Spatial
     dedupe keeps the lowest row of each duplicate group, so it follows the
     catalog's row order.
@@ -133,20 +133,21 @@ def match_hub_and_spoke(
         raise TypeError("workers must be an integer >= 1 or -1")
     workers = resolve_workers(int(workers))
 
-    identifiers = {}
+    uid_sources = {name for name, link in links.items() if isinstance(link, UIDLink)}
+    if uid_sources:
+        uid_sources.add(anchor)
     surveys = {}
     for name, table in catalogs.items():
         if not isinstance(table, pa.Table):
             raise TypeError(f"catalog {name!r} must be a pyarrow.Table")
         if len(set(table.column_names)) != len(table.column_names):
             raise ValueError(f"catalog {name!r} has duplicate column names")
-        if "id" not in table.column_names:
-            raise ValueError(f"catalog {name!r} requires an id column")
-        identifiers[name] = _identifiers(table["id"], name=name, kind="IDs")
+        if name in uid_sources and not {"uid", "id"} & set(table.column_names):
+            raise ValueError(f"catalog {name!r} needs a uid or id column for UID links")
         if name in spatial:
             surveys[name] = _spatial_input(name, table)
 
-    rows = {anchor: pa.array(np.arange(len(identifiers[anchor]), dtype=np.int64))}
+    rows = {anchor: pa.array(np.arange(catalogs[anchor].num_rows, dtype=np.int64))}
     link_provenance = {}
     for name in others:
         link = links[name]
@@ -171,9 +172,6 @@ def match_hub_and_spoke(
                     pair.schema.metadata[b"astro_crossmatch.resolved_config"]
                 ),
             }
-            # Record the catalog ID types gathered into the final table.
-            for survey in link_provenance[name]["resolved_config"]["surveys"]:
-                survey["id_type"] = str(identifiers[survey["name"]].type)
         else:
             result = crossmatch(
                 [surveys[source] for source in pair_names],
@@ -219,13 +217,11 @@ def match_hub_and_spoke(
         "ordering": "anchor_input_order",
         "links": link_provenance,
         "dedupe_radius_arcsec": dedupe_radii,
-        "surveys": [
-            {"name": name, "id_type": str(identifiers[name].type)} for name in names
-        ],
+        "surveys": [{"name": name} for name in names],
     }
     columns = {"entity_id": pa.array(np.arange(len(rows[anchor]), dtype=np.int64))}
     for name in names:
-        columns[f"{name}/id"] = pc.take(identifiers[name], rows.pop(name))
+        columns[f"{name}/row_index"] = pc.cast(rows.pop(name), pa.int64())
     return pa.table(columns).replace_schema_metadata(
         {
             b"astro_crossmatch.resolved_config": json.dumps(

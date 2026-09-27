@@ -124,7 +124,7 @@ For independent links to one anchor, use the separate
 or spatial matching; all-UID, all-spatial and mixed-link configurations are
 supported. It intersects full-input link results, requiring every spoke to
 match the anchor without checking spoke-to-spoke relationships, and returns
-typed ID columns. The richer spatial `crossmatch` modes and N-source
+row columns like every other matcher. The richer spatial `crossmatch` modes and N-source
 `match_uids` joins remain separate APIs.
 
 - The kernel emits the complete inclusive-radius candidate set.

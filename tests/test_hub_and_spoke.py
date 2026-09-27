@@ -7,7 +7,16 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-from astro_crossmatch import SpatialLink, UIDLink, match_hub_and_spoke
+from astro_crossmatch import SpatialLink, UIDLink, rows_to_ids
+from astro_crossmatch import match_hub_and_spoke as match_hub_and_spoke_rows
+
+
+def match_hub_and_spoke(catalogs, **kwargs):
+    """Rows mapped to each table's ``id`` column, as the assertions below expect."""
+    return rows_to_ids(
+        match_hub_and_spoke_rows(catalogs, **kwargs),
+        {name: table["id"] for name, table in catalogs.items()},
+    )
 
 
 def catalog(ids, *, uid=None, offsets=None, id_type=None):
@@ -113,9 +122,7 @@ def test_uid_eligibility_does_not_change_full_anchor_dedupe_keeper():
     assert metadata["links"]["sky"]["dedupe"]["a"]["n_dropped"] == 1
 
 
-@pytest.mark.parametrize(
-    "invalid", ["duplicate_uid", "null_uid", "duplicate_id", "nan"]
-)
+@pytest.mark.parametrize("invalid", ["duplicate_uid", "null_uid", "nan"])
 def test_empty_uid_link_does_not_skip_validation_of_other_full_inputs(invalid):
     third = catalog([200], uid=[1], offsets=[0.1])
     links = {"empty": UIDLink(), "third": UIDLink()}
@@ -124,8 +131,6 @@ def test_empty_uid_link_does_not_skip_validation_of_other_full_inputs(invalid):
         third = catalog([200, 201], uid=[1, 1])
     elif invalid == "null_uid":
         third = catalog([200], uid=[None])
-    elif invalid == "duplicate_id":
-        third = catalog([200, 200], uid=[1, 2])
     else:
         third = catalog([200], offsets=[np.nan])
         links["third"] = SpatialLink(1)
