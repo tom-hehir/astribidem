@@ -144,6 +144,27 @@ runs band tasks in parallel processes. `max_carried_rows` makes the sweep fail
 loudly when groups span many bands, which happens only when the radius is too
 large for the source density.
 
+To resolve large saved edges without loading every segment at once, use
+`resolve_to_file`:
+
+```python
+from astro_crossmatch import EntitywiseCrossmatchConfig, resolve_to_file
+
+resolve_to_file(
+    "edges-directory",
+    EntitywiseCrossmatchConfig(),
+    "index.parquet",
+    processes=8,
+)
+```
+
+It resolves each segment on its own, optionally in parallel processes, and
+merges the per-segment indexes into the usual entity order: first present
+survey, then that survey's row. The file equals
+`resolve(read_edges(...), mode).table`, metadata included, while the merge
+holds only `batch_rows` rows of each segment at a time. `sort=False` skips the
+merge and lists each segment's entities in segment order.
+
 For separate processes, such as a job array, `prepare_band_build` records the
 settings and returns the bands, `build_band(edges_directory, band)` builds one
 band, and `sweep_boundaries(edges_directory)` finishes the build once every
