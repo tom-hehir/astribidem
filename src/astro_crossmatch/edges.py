@@ -95,32 +95,53 @@ def dedupe_survey(
     # The complete within-radius pair set: nearest-only truncation would hide
     # exactly the extra candidates that make components disputed.
     first, second, _ = kernel.self_pairs(radius_arcsec)
-
-    labels = connected_components(n, first, second)
-    sizes, edge_counts = component_sizes_and_edge_counts(labels, first)
-    is_clique = clique_mask(sizes, edge_counts)
-
-    multi = sizes[labels] > 1
-    clique_member = is_clique[labels] & multi
-    disputed = ~is_clique[labels] & multi
-
-    # Keeper per component = its lowest row.
-    keeper = np.full(len(sizes), n, dtype=np.int64)
-    np.minimum.at(keeper, labels, np.arange(n, dtype=np.int64))
-    dropped = clique_member & (np.arange(n) != keeper[labels])
-
+    dropped, kept, disputed = dedupe_from_pairs(
+        np.arange(n, dtype=np.int64), first, second
+    )
     active[dropped] = False
     active[disputed] = False
-
     outcome = DedupeOutcome(
         name=coords.name,
         n_rows=n,
         dedupe_radius_arcsec=radius_arcsec,
-        dropped_rows=np.flatnonzero(dropped),
-        kept_rows=keeper[labels[dropped]],
-        disputed_rows=np.flatnonzero(disputed),
+        dropped_rows=dropped,
+        kept_rows=kept,
+        disputed_rows=disputed,
     )
     return outcome, active
+
+
+def dedupe_from_pairs(
+    rows: np.ndarray, first: np.ndarray, second: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Dedupe verdicts from one survey's within-radius pairs, without coordinates.
+
+    ``rows`` holds the global row number of each of ``n`` nodes, in any order;
+    ``first`` / ``second`` index those nodes, one entry per pair. Groups of
+    rows joined by pairs that form cliques keep their lowest row and drop the
+    rest; other groups of two or more rows are disputed. Returns global rows:
+    ``dropped`` (ascending), the ``kept`` row of each dropped row, and
+    ``disputed`` (ascending).
+    """
+    rows = np.asarray(rows, dtype=np.int64)
+    n = len(rows)
+    if n == 0 or len(first) == 0:
+        empty = np.empty(0, dtype=np.int64)
+        return empty, empty, empty
+    labels = connected_components(n, first, second)
+    sizes, edge_counts = component_sizes_and_edge_counts(labels, first)
+    is_clique = clique_mask(sizes, edge_counts)
+    multi = sizes[labels] > 1
+    disputed = ~is_clique[labels] & multi
+    keeper = np.full(len(sizes), np.iinfo(np.int64).max, dtype=np.int64)
+    np.minimum.at(keeper, labels, rows)
+    dropped = is_clique[labels] & multi & (rows != keeper[labels])
+    order = np.argsort(rows[dropped], kind="stable")
+    return (
+        rows[dropped][order],
+        keeper[labels[dropped]][order],
+        np.sort(rows[disputed]),
+    )
 
 
 def pair_edge_chunks(
@@ -189,6 +210,25 @@ def build_pair_edges(
 
 
 @dataclass(frozen=True)
+class EdgeSettings:
+    """Validated matching settings for an edge build, independent of coordinates.
+
+    ``pair_radius_arcsec`` maps each built pair, in survey order, to its radius.
+    """
+
+    survey_names: tuple[str, ...]
+    n_rows: dict[str, int]
+    dedupe_radius_arcsec: dict[str, float]
+    pair_radius_arcsec: dict[tuple[str, str], float]
+
+    @property
+    def max_radius_arcsec(self) -> float:
+        """The largest pair or dedupe radius: the margin a region needs."""
+        radii = [*self.pair_radius_arcsec.values(), *self.dedupe_radius_arcsec.values()]
+        return max(radii, default=0.0)
+
+
+@dataclass(frozen=True)
 class _EdgeBuildPlan:
     """Validated edge-build settings, shared by in-memory and streamed builds."""
 
@@ -207,22 +247,27 @@ def _validate_survey(survey: SurveyCoords) -> None:
         raise ValueError(f"survey {survey.name!r}: coordinates must be finite")
 
 
-def _plan_edge_build(
-    surveys: Sequence[SurveyCoords],
+def edge_settings(
+    n_rows: Mapping[str, int],
+    *,
     radius_arcsec: float,
     dedupe_radius_arcsec: Mapping[str, float],
-    pair_radius_overrides: Mapping[tuple[str, str] | frozenset[str], float] | None,
-    pairs: Iterable[tuple[str, str]] | None,
-) -> _EdgeBuildPlan:
-    surveys = tuple(surveys)
-    if not surveys:
+    pair_radius_overrides: Mapping[tuple[str, str] | frozenset[str], float]
+    | None = None,
+    pairs: Iterable[tuple[str, str]] | None = None,
+) -> EdgeSettings:
+    """Validate matching settings for surveys with the given row counts.
+
+    ``n_rows`` maps each survey name, in survey order, to its row count. The
+    remaining arguments are those of ``build_edges``.
+    """
+    names = tuple(n_rows)
+    if not names:
         raise ValueError("at least one survey is required")
-    for survey in surveys:
-        _validate_survey(survey)
-    names = tuple(survey.name for survey in surveys)
+    for name in names:
+        if not isinstance(name, str) or not name or "/" in name:
+            raise ValueError("survey names must be non-empty and must not contain '/'")
     known = set(names)
-    if len(known) != len(names):
-        raise ValueError("survey names must be unique")
     if set(dedupe_radius_arcsec) != known:
         raise ValueError("dedupe_radius_arcsec must name every survey exactly once")
     dedupe_radii = {name: float(dedupe_radius_arcsec[name]) for name in names}
@@ -261,14 +306,44 @@ def _plan_edge_build(
             ):
                 raise ValueError(f"pairs names an invalid survey pair: {pair!r}")
             selected.add(key)
-    return _EdgeBuildPlan(
-        surveys=surveys,
+    return EdgeSettings(
+        survey_names=names,
+        n_rows={name: int(n_rows[name]) for name in names},
         dedupe_radius_arcsec=dedupe_radii,
         pair_radius_arcsec={
             (a, b): radii[frozenset((a, b))]
             for a, b in combinations(names, 2)
             if selected is None or frozenset((a, b)) in selected
         },
+    )
+
+
+def _plan_edge_build(
+    surveys: Sequence[SurveyCoords],
+    radius_arcsec: float,
+    dedupe_radius_arcsec: Mapping[str, float],
+    pair_radius_overrides: Mapping[tuple[str, str] | frozenset[str], float] | None,
+    pairs: Iterable[tuple[str, str]] | None,
+) -> _EdgeBuildPlan:
+    surveys = tuple(surveys)
+    if not surveys:
+        raise ValueError("at least one survey is required")
+    for survey in surveys:
+        _validate_survey(survey)
+    names = [survey.name for survey in surveys]
+    if len(set(names)) != len(names):
+        raise ValueError("survey names must be unique")
+    settings = edge_settings(
+        {survey.name: len(survey) for survey in surveys},
+        radius_arcsec=radius_arcsec,
+        dedupe_radius_arcsec=dedupe_radius_arcsec,
+        pair_radius_overrides=pair_radius_overrides,
+        pairs=pairs,
+    )
+    return _EdgeBuildPlan(
+        surveys=surveys,
+        dedupe_radius_arcsec=settings.dedupe_radius_arcsec,
+        pair_radius_arcsec=settings.pair_radius_arcsec,
     )
 
 
