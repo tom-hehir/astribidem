@@ -88,3 +88,29 @@ the limit. Very small chunks can slow the build.
 Streaming bounds only the edges. Every survey's coordinates, KD-tree and dedupe
 results stay in memory for the whole build, at roughly 50 bytes per row.
 Resolution later loads all edges of the surveys it uses, but no coordinates.
+
+## Audit the edges
+
+```python
+from astro_crossmatch import audit_edges
+
+audit = audit_edges(edges)  # a dictionary of plain JSON types
+```
+
+The audit works on edges held in memory or reloaded with `read_edges`. It
+reports:
+
+- for each survey, its row count, active rows, dropped and disputed rows, and
+  the number and largest size of its duplicate groups;
+- for each pair, its radius, edge count, separation percentiles, the fraction of
+  active rows with at least one candidate, and the rows with several
+  candidates;
+- a census of connected components over every survey: a size histogram, the
+  largest component, clean and ambiguous counts, and counts by survey
+  combination.
+
+A growing largest component warns that the radius is close to percolation. A
+clean component spanning surveys A and B is one row of a clean A x B product,
+so the combination counts size subset joins before building them. The census
+omits pairs that were not built; `all_pairs_built` is false in that case.
+

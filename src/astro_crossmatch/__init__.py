@@ -1,6 +1,7 @@
 """Exact astronomical crossmatching with row-position entity indexes."""
 
 from astro_crossmatch.api import crossmatch, resolve, rows_to_ids
+from astro_crossmatch.audit import audit_edges
 from astro_crossmatch.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
 from astro_crossmatch.edge_files import (
     build_edges_to_directory,
@@ -32,6 +33,7 @@ __all__ = [
     "SpatialLink",
     "SurveyCoords",
     "UIDLink",
+    "audit_edges",
     "build_edges",
     "build_edges_to_directory",
     "crossmatch",

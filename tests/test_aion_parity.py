@@ -3,9 +3,11 @@
 ``fixtures/aion_parity.npz`` holds synthetic catalogs and the indexes AION-2
 built from them; ``fixtures/generate_aion_parity.py`` records it. Rows here are
 AION-2's ``row_index`` values, so every column must agree element for element.
-Resolving saved, reloaded or streamed edges must give the same indexes.
+Resolving saved, reloaded or streamed edges must give the same indexes, and
+the edge audit must agree with AION-2's pair statistics and component census.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -16,6 +18,7 @@ from astro_crossmatch import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
+    audit_edges,
     build_edges,
     build_edges_to_directory,
     crossmatch,
@@ -111,3 +114,10 @@ def test_fixture_exercises_duplicates_and_ambiguity():
     refuse = EXPECTED["entitywise_refuse_singleton/a/row_index"]
     split = EXPECTED["entitywise_split_singleton/a/row_index"]
     assert len(refuse) != len(split)
+
+
+def test_audit_reproduces_aion_pair_statistics_and_component_census(edge_sources):
+    audit = audit_edges(edge_sources["in_memory"])
+    assert audit["pairs"] == json.loads(str(EXPECTED["audit/pairs"]))
+    assert audit["components"] == json.loads(str(EXPECTED["audit/components"]))
+    assert audit["components"]["n_ambiguous"] > 100
