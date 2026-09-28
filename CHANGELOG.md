@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.0.0a0 — unreleased
+## 0.0.0a0 — 2026-09-28
 
-First public alpha, prepared for release. The earlier `0.1.0a1` metadata was
+First public alpha. The earlier `0.1.0a1` metadata was
 used only during private development and was never published.
 
 - Spatial, exact UID and hub-and-spoke matching returning Arrow row indexes.
