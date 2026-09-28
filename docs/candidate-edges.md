@@ -161,7 +161,7 @@ resolve_to_file(
 It resolves each segment on its own, optionally in parallel processes, and
 sorts the per-segment indexes into the usual entity order: first present
 survey, then that survey's row. The file equals
-`resolve(read_edges(...), mode).table`, metadata included.
+`resolve(read_edges(...), mode)`, metadata included.
 
 The sort runs in DuckDB, installed with the `large` extra
 (`astro-crossmatch[large]`). DuckDB spills to disk beyond `memory_limit`, such

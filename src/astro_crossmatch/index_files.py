@@ -6,7 +6,7 @@ Segments never share a connected group of rows, so the entities are exactly
 those of resolving every segment together. With ``sort=True`` (the default)
 the per-segment indexes are sorted into the global entity order: first
 present survey, then that survey's row. The result then equals
-``resolve(read_edges(directory), mode).table``, metadata included.
+``resolve(read_edges(directory), mode)``, metadata included.
 
 The sort runs in DuckDB, the optional ``large`` dependency, which spills to
 disk beyond ``memory_limit``. DuckDB could write the sorted index to Parquet
@@ -35,7 +35,7 @@ _BATCH_ROWS = 65_536
 
 def _resolve_segment(arguments) -> None:
     edges_directory, name, mode, path = arguments
-    table = resolve(read_segment(edges_directory, name), mode).table
+    table = resolve(read_segment(edges_directory, name), mode)
     pq.write_table(table, path)
 
 

@@ -13,6 +13,7 @@ from astro_crossmatch.modes import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
+    index_summary,
     one_to_one_pairs,
 )
 
@@ -86,14 +87,14 @@ def test_degenerate_two_survey_join_emits_rows_and_separations():
         {("a", "b"): ([0, 1], [0, 1], [0.1, 0.2])},
     )
     result = DegenerateCrossmatchConfig(surveys=["a", "b"]).build(inputs)
-    table = result.table
+    table = result
     assert table.column("a/row_index").to_pylist() == [0, 1]
     assert table.column("b/row_index").to_pylist() == [0, 1]
     seps = table.column("a__b/separation_arcsec").to_pylist()
     assert seps == pytest.approx([0.1, 0.2], abs=1e-6)
     metadata = table.schema.metadata
     assert metadata[b"astro_crossmatch.match_index.mode"] == b"degenerate"
-    assert result.summary["n_groups"] == 2
+    assert index_summary(result)["n_groups"] == 2
 
 
 def test_degenerate_three_way_requires_all_pairwise_agreement():
@@ -105,8 +106,8 @@ def test_degenerate_three_way_requires_all_pairwise_agreement():
     }
     inputs = _inputs({"a": 2, "b": 2, "c": 2}, edges)
     result = DegenerateCrossmatchConfig(surveys=["a", "b", "c"]).build(inputs)
-    assert result.summary["n_groups"] == 1
-    assert result.table.column("a/row_index").to_pylist() == [0]
+    assert index_summary(result)["n_groups"] == 1
+    assert result.column("a/row_index").to_pylist() == [0]
 
 
 def test_degenerate_anchored_policy_restricted_to_two_surveys():
@@ -128,7 +129,7 @@ def test_entitywise_clean_pair_and_singletons():
         {("a", "b"): ([0], [0], [0.2])},
     )
     result = EntitywiseCrossmatchConfig().build(inputs)
-    table = result.table
+    table = result
     assert table.num_rows == 3
     rows = set(
         zip(
@@ -138,7 +139,7 @@ def test_entitywise_clean_pair_and_singletons():
     )
     assert rows == {(0, 0), (1, None), (None, 1)}
     assert table.column("disputed_reason").to_pylist() == [None, None, None]
-    assert result.summary["n_clean_multi_survey"] == 1
+    assert index_summary(result)["n_clean_multi_survey"] == 1
 
 
 def test_entitywise_refuse_dissolves_flanked_component():
@@ -148,11 +149,11 @@ def test_entitywise_refuse_dissolves_flanked_component():
         {("a", "b"): ([0, 1], [0, 0], [0.2, 0.4])},
     )
     result = EntitywiseCrossmatchConfig().build(inputs)
-    table = result.table
+    table = result
     assert table.num_rows == 3  # three flagged singletons
     assert set(table.column("disputed_reason").to_pylist()) == {"ambiguous_component"}
-    assert result.summary["n_ambiguous_components"] == 1
-    assert result.summary["rows_in_ambiguous_components"] == 3
+    assert index_summary(result)["n_ambiguous_components"] == 1
+    assert index_summary(result)["rows_in_ambiguous_components"] == 3
 
 
 def test_entitywise_dedupe_disputed_rows_surface_as_flagged_singletons():
@@ -162,7 +163,7 @@ def test_entitywise_dedupe_disputed_rows_surface_as_flagged_singletons():
         disputed={"a": [1, 2]},
     )
     result = EntitywiseCrossmatchConfig().build(inputs)
-    table = result.table
+    table = result
     reasons = table.column("disputed_reason").to_pylist()
     assert reasons.count("dedupe_disputed") == 2
     dedupe_rows = [
@@ -173,8 +174,8 @@ def test_entitywise_dedupe_disputed_rows_surface_as_flagged_singletons():
     assert sorted(dedupe_rows) == [1, 2]
 
     dropped = EntitywiseCrossmatchConfig(disputed="drop").build(inputs)
-    assert dropped.table.num_rows == 1  # only the clean pair survives
-    assert dropped.table.column("disputed_reason").to_pylist() == [None]
+    assert dropped.num_rows == 1  # only the clean pair survives
+    assert dropped.column("disputed_reason").to_pylist() == [None]
 
 
 def test_entitywise_split_resolver_partitions_chain():
@@ -184,8 +185,8 @@ def test_entitywise_split_resolver_partitions_chain():
         {("a", "b"): ([0, 1], [0, 0], [0.2, 0.9])},
     )
     result = EntitywiseCrossmatchConfig(resolver="split").build(inputs)
-    table = result.table
-    assert result.summary["n_resolved_groups"] == 2
+    table = result
+    assert index_summary(result)["n_resolved_groups"] == 2
     rows = set(
         zip(
             table.column("a/row_index").to_pylist(),
@@ -208,8 +209,8 @@ def test_entitywise_sequential_resolver_uses_priority():
     ).build(inputs)
     rows = set(
         zip(
-            result.table.column("a/row_index").to_pylist(),
-            result.table.column("b/row_index").to_pylist(),
+            result.column("a/row_index").to_pylist(),
+            result.column("b/row_index").to_pylist(),
         )
     )
     assert rows == {(1, 0), (0, None)}
@@ -224,10 +225,8 @@ def test_entitywise_size_cap_dissolves_oversized_components():
         {("a", "b"): ([0, 1], [0, 0], [0.2, 0.4])},
     )
     result = EntitywiseCrossmatchConfig(resolver="split", size_cap=2).build(inputs)
-    assert result.summary["n_resolved_groups"] == 0
-    assert set(result.table.column("disputed_reason").to_pylist()) == {
-        "ambiguous_component"
-    }
+    assert index_summary(result)["n_resolved_groups"] == 0
+    assert set(result.column("disputed_reason").to_pylist()) == {"ambiguous_component"}
 
 
 def test_entitywise_selection_filters_after_resolution():
@@ -238,17 +237,17 @@ def test_entitywise_selection_filters_after_resolution():
     result = EntitywiseCrossmatchConfig(
         selection=EntitySelectionConfig(min_surveys=2)
     ).build(inputs)
-    assert result.table.num_rows == 1
-    assert result.table.column("a/row_index").to_pylist() == [0]
-    assert result.summary["n_entities_before_selection"] == 3
+    assert result.num_rows == 1
+    assert result.column("a/row_index").to_pylist() == [0]
+    assert index_summary(result)["n_entities_before_selection"] == 3
 
     must = EntitywiseCrossmatchConfig(
         selection=EntitySelectionConfig(must_include_surveys=["b"])
     ).build(inputs)
     rows = set(
         zip(
-            must.table.column("a/row_index").to_pylist(),
-            must.table.column("b/row_index").to_pylist(),
+            must.column("a/row_index").to_pylist(),
+            must.column("b/row_index").to_pylist(),
         )
     )
     assert rows == {(0, 0), (None, 1)}
@@ -261,7 +260,7 @@ def test_entitywise_selection_filters_after_resolution():
 
 def test_entitywise_absent_surveys_are_null_rows():
     inputs = _inputs({"a": 1, "b": 1}, {})
-    table = EntitywiseCrossmatchConfig().build(inputs).table
+    table = EntitywiseCrossmatchConfig().build(inputs)
     assert table.schema.field("a/row_index").type == pa.int64()
     rows = set(
         zip(
@@ -294,7 +293,7 @@ def test_entitywise_orders_entities_by_first_present_survey_then_row():
         {("a", "b"): ([2, 4], [3, 1], [0.1, 0.1])},
         disputed={"a": [3], "b": [2]},
     )
-    table = EntitywiseCrossmatchConfig().build(inputs).table
+    table = EntitywiseCrossmatchConfig().build(inputs)
     assert list(
         zip(table["a/row_index"].to_pylist(), table["b/row_index"].to_pylist())
     ) == [(0, None), (1, None), (2, 3), (3, None), (4, 1), (None, 0), (None, 2)]

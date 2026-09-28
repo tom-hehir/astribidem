@@ -68,8 +68,8 @@ def test_resolving_built_edges_equals_crossmatch():
         EntitywiseCrossmatchConfig(resolver="split"),
         DegenerateCrossmatchConfig(surveys=["a", "b"]),
     ):
-        expected = crossmatch(SURVEYS, mode=mode, **SETTINGS).table
-        assert resolve(edges, mode).table.equals(expected, check_metadata=True)
+        expected = crossmatch(SURVEYS, mode=mode, **SETTINGS)
+        assert resolve(edges, mode).equals(expected, check_metadata=True)
 
 
 def test_saved_files_hold_rows_dedupe_outcomes_and_settings(tmp_path):
@@ -120,7 +120,7 @@ def test_restricted_pairs_serve_only_degenerate_modes_over_them():
     edges = build_edges(SURVEYS, pairs=[("b", "a")], **SETTINGS)
     assert list(edges.pairs) == [frozenset({"a", "b"})]
     degenerate = DegenerateCrossmatchConfig(surveys=["a", "b"])
-    assert resolve(edges, degenerate).table["a/row_index"].to_pylist() == [0, 6]
+    assert resolve(edges, degenerate)["a/row_index"].to_pylist() == [0, 6]
     with pytest.raises(ValueError, match="without survey pairs"):
         resolve(edges, EntitywiseCrossmatchConfig())
     with pytest.raises(ValueError, match="without survey pairs"):
@@ -271,7 +271,7 @@ def test_resolving_segments_separately_gives_the_same_entities():
         EntitywiseCrossmatchConfig(resolver="split"),
         DegenerateCrossmatchConfig(surveys=["a", "b"]),
     ):
-        whole = resolve(edges, mode).table
-        parts = [resolve(segment, mode).table for segment in segments]
+        whole = resolve(edges, mode)
+        parts = [resolve(segment, mode) for segment in segments]
         split = sorted(json.dumps(r) for part in parts for r in part.to_pylist())
         assert split == sorted(json.dumps(r) for r in whole.to_pylist())

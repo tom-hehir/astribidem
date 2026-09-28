@@ -27,7 +27,7 @@ sources = [
     survey_coords_from_arrays("a", ra=[10.0, 20.0], dec=[0.0, 0.0]),
     survey_coords_from_arrays("b", ra=[10.0001, 30.0], dec=[0.0, 0.0]),
 ]
-result = crossmatch(
+rows = crossmatch(
     sources,
     radius_arcsec=1.0,
     dedupe_radius_arcsec={"a": 0.0, "b": 0.0},
@@ -36,7 +36,7 @@ result = crossmatch(
 # a/row_index | b/row_index | a__b/separation_arcsec
 #           0 |           0 |                   0.36
 
-index = rows_to_ids(result.table, {"a": [101, 102], "b": ["b-201", "b-202"]})
+index = rows_to_ids(rows, {"a": [101, 102], "b": ["b-201", "b-202"]})
 # a/id | b/id  | a__b/separation_arcsec
 #  101 | b-201 |                   0.36
 ```
@@ -63,14 +63,14 @@ An index is an ordinary Arrow table, so save it as Parquet:
 ```python
 import pyarrow.parquet as pq
 
-pq.write_table(result.table, "index.parquet")
+pq.write_table(rows, "index.parquet")
 index = pq.read_table("index.parquet")
 ```
 
 Its schema metadata records the matching configuration
 (`astro_crossmatch.resolved_config`), per-survey dedupe outcomes
 (`astro_crossmatch.dedupe`), mode settings and the result summary
-(`astro_crossmatch.summary`, the same counts as `result.summary`), so the saved
+(`astro_crossmatch.summary`, read with `index_summary(rows)`), so the saved
 file is self-describing. Tables from `rows_to_ids` keep that metadata.
 
 ## Match exact UIDs

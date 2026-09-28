@@ -69,7 +69,7 @@ def test_merged_index_equals_resolving_everything_at_once(
 ):
     path = tmp_path / "index.parquet"
     resolve_to_file(banded, mode, path, memory_limit=memory_limit, threads=threads)
-    expected = resolve(read_edges(banded), mode).table
+    expected = resolve(read_edges(banded), mode)
     assert pq.read_table(path).equals(expected, check_metadata=True)
     assert not list(tmp_path.glob(".*"))  # the per-segment files are removed
 
@@ -87,7 +87,7 @@ def test_unsorted_index_holds_the_same_entities_in_segment_order(banded, tmp_pat
     mode = EntitywiseCrossmatchConfig()
     resolve_to_file(banded, mode, tmp_path / "unsorted.parquet", sort=False)
     unsorted = pq.read_table(tmp_path / "unsorted.parquet")
-    expected = resolve(read_edges(banded), mode).table
+    expected = resolve(read_edges(banded), mode)
     assert unsorted.num_rows == expected.num_rows
     assert sorted(map(str, unsorted.to_pylist())) == sorted(
         map(str, expected.to_pylist())
@@ -112,7 +112,7 @@ def test_single_segment_edges_resolve_to_the_same_index(tmp_path):
     mode = EntitywiseCrossmatchConfig()
     resolve_to_file(tmp_path / "edges", mode, tmp_path / "index.parquet")
     assert pq.read_table(tmp_path / "index.parquet").equals(
-        resolve(edges, mode).table, check_metadata=True
+        resolve(edges, mode), check_metadata=True
     )
 
 
@@ -139,7 +139,7 @@ def test_scattered_segments_sort_correctly_within_a_small_memory_limit(tmp_path)
     mode = EntitywiseCrossmatchConfig()
     path = tmp_path / "index.parquet"
     resolve_to_file(edges, mode, path, memory_limit="32MB", threads=1)
-    expected = resolve(read_edges(edges), mode).table
+    expected = resolve(read_edges(edges), mode)
     assert pq.read_table(path).equals(expected, check_metadata=True)
     with pytest.raises(MemoryError, match="raise memory_limit or lower threads"):
         resolve_to_file(edges, mode, path, memory_limit="1MB", threads=1)

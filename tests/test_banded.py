@@ -131,9 +131,9 @@ def test_resolving_each_segment_gives_the_in_memory_entities(tmp_path):
     rows = sorted(
         json.dumps(r)
         for name in segment_names(edges_directory)
-        for r in resolve(read_segment(edges_directory, name), mode).table.to_pylist()
+        for r in resolve(read_segment(edges_directory, name), mode).to_pylist()
     )
-    whole = resolve(in_memory(CATALOGS, **SETTINGS), mode).table.to_pylist()
+    whole = resolve(in_memory(CATALOGS, **SETTINGS), mode).to_pylist()
     assert rows == sorted(json.dumps(r) for r in whole)
 
 

@@ -173,7 +173,7 @@ def match_hub_and_spoke(
                 ),
             }
         else:
-            result = crossmatch(
+            pair = crossmatch(
                 [surveys[source] for source in pair_names],
                 radius_arcsec=link.radius_arcsec,
                 dedupe_radius_arcsec={
@@ -184,7 +184,6 @@ def match_hub_and_spoke(
                 ),
                 workers=workers,
             )
-            pair = result.table
             pair_rows = {source: pair[f"{source}/row_index"] for source in pair_names}
             link_provenance[name] = {
                 "method": "sky",
@@ -195,7 +194,6 @@ def match_hub_and_spoke(
                 ),
                 "dedupe": json.loads(pair.schema.metadata[b"astro_crossmatch.dedupe"]),
             }
-            del result
         link_provenance[name]["n_matches"] = pair.num_rows
         # Link decisions above always use full inputs. Only their completed
         # row maps are intersected with earlier links here.

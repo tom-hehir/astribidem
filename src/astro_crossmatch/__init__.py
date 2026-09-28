@@ -32,7 +32,7 @@ from astro_crossmatch.modes import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
-    ModeResult,
+    index_summary,
 )
 from astro_crossmatch.uids import match_uids
 
@@ -44,7 +44,6 @@ __all__ = [
     "DegenerateCrossmatchConfig",
     "EntitySelectionConfig",
     "EntitywiseCrossmatchConfig",
-    "ModeResult",
     "PairEdges",
     "SpatialLink",
     "SurveyCoords",
@@ -56,6 +55,7 @@ __all__ = [
     "build_edges_to_directory",
     "combine_segments",
     "crossmatch",
+    "index_summary",
     "match_hub_and_spoke",
     "match_uids",
     "prepare_band_build",

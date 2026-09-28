@@ -13,6 +13,7 @@ from astro_crossmatch import (
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
     crossmatch,
+    index_summary,
     rows_to_ids,
     survey_coords_from_arrays,
 )
@@ -38,22 +39,22 @@ def resolve(surveys, *, mode=None, **kwargs):
 def test_public_entity_index_emits_rows_nulls_and_round_trips_parquet(tmp_path):
     sources = [survey("a", [0, 20]), survey("b", [0.2])]
     result = resolve(sources)
-    assert result.table.schema.field("a/row_index").type == pa.int64()
-    assert result.table.to_pylist() == [
+    assert result.schema.field("a/row_index").type == pa.int64()
+    assert result.to_pylist() == [
         {"a/row_index": 0, "b/row_index": 0, "disputed_reason": None},
         {"a/row_index": 1, "b/row_index": None, "disputed_reason": None},
     ]
     path = tmp_path / "index.parquet"
-    pq.write_table(result.table, path)
-    assert pq.read_table(path).equals(result.table, check_metadata=True)
+    pq.write_table(result, path)
+    assert pq.read_table(path).equals(result, check_metadata=True)
 
 
 def test_public_dedupe_keeps_lowest_row_and_reports_outcome():
     sources = [survey("a", [0.1, 0]), survey("b", [0.05])]
     result = resolve(sources, dedupe_radius_arcsec={"a": 0.2, "b": 0})
-    assert result.table["a/row_index"].to_pylist() == [0]
-    assert result.table["b/row_index"].to_pylist() == [0]
-    outcomes = json.loads(result.table.schema.metadata[b"astro_crossmatch.dedupe"])
+    assert result["a/row_index"].to_pylist() == [0]
+    assert result["b/row_index"].to_pylist() == [0]
+    outcomes = json.loads(result.schema.metadata[b"astro_crossmatch.dedupe"])
     assert outcomes["a"]["n_dropped"] == 1
 
 
@@ -61,7 +62,7 @@ def test_rows_to_ids_keeps_types_nulls_column_order_and_metadata():
     big = 2**60 + 7
     result = resolve([survey("a", [0, 20]), survey("b", [0.2])])
     table = rows_to_ids(
-        result.table,
+        result,
         {"a": pa.array([big, big + 1], pa.uint64()), "b": ["b-0"]},
         id_columns={"a": "object_id"},
     )
@@ -71,22 +72,22 @@ def test_rows_to_ids_keeps_types_nulls_column_order_and_metadata():
         {"a/object_id": big, "b/id": "b-0", "disputed_reason": None},
         {"a/object_id": big + 1, "b/id": None, "disputed_reason": None},
     ]
-    assert table.schema.metadata == result.table.schema.metadata
+    assert table.schema.metadata == result.schema.metadata
 
 
 def test_rows_to_ids_leaves_unnamed_surveys_as_rows():
     result = resolve([survey("a", [0]), survey("b", [0.2])])
-    table = rows_to_ids(result.table, {"b": [42]})
+    table = rows_to_ids(result, {"b": [42]})
     assert table.column_names == ["a/row_index", "b/id", "disputed_reason"]
 
 
 def test_pair_override_changes_dispute_classification():
     sources = [survey("a", [0]), survey("b", [0.3]), survey("c", [0.6])]
     clean = resolve(sources)
-    assert len(clean.table) == 1
+    assert len(clean) == 1
     disputed = resolve(sources, pair_radius_overrides={("a", "c"): 0.1})
-    assert len(disputed.table) == 3
-    assert disputed.table["disputed_reason"].to_pylist() == ["ambiguous_component"] * 3
+    assert len(disputed) == 3
+    assert disputed["disputed_reason"].to_pylist() == ["ambiguous_component"] * 3
 
 
 def test_selection_does_not_hide_optional_survey_ambiguity():
@@ -98,24 +99,24 @@ def test_selection_does_not_hide_optional_survey_ambiguity():
     mode = EntitywiseCrossmatchConfig(
         selection=EntitySelectionConfig(min_surveys=2, must_include_surveys=["a", "b"])
     )
-    assert len(resolve(sources, mode=mode).table) == 0
+    assert len(resolve(sources, mode=mode)) == 0
 
 
 def test_subset_join_builds_only_selected_relations():
     sources = [survey("a", [0]), survey("b", [0.2]), survey("c", [20])]
     result = resolve(sources, mode=DegenerateCrossmatchConfig(surveys=["a", "b"]))
-    assert result.table.column_names == [
+    assert result.column_names == [
         "a/row_index",
         "b/row_index",
         "a__b/separation_arcsec",
     ]
-    assert result.table["a/row_index"].to_pylist() == [0]
+    assert result["a/row_index"].to_pylist() == [0]
 
 
 def test_empty_survey_is_valid_and_missing_members_stay_null():
     sources = [survey("a", []), survey("b", [0])]
     result = resolve(sources)
-    assert result.table.to_pylist() == [
+    assert result.to_pylist() == [
         {"a/row_index": None, "b/row_index": 0, "disputed_reason": None}
     ]
 
@@ -187,6 +188,5 @@ def test_geometry_adapter_warns_on_low_precision_coordinates():
 def test_saved_index_keeps_its_summary(tmp_path):
     result = resolve([survey("a", [0, 20]), survey("b", [0.2])])
     path = tmp_path / "index.parquet"
-    pq.write_table(result.table, path)
-    metadata = pq.read_table(path).schema.metadata
-    assert json.loads(metadata[b"astro_crossmatch.summary"]) == result.summary
+    pq.write_table(result, path)
+    assert index_summary(pq.read_table(path)) == index_summary(result)

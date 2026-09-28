@@ -118,9 +118,9 @@ def edge_sources(surveys, tmp_path_factory):
 def test_reproduces_aion_output(surveys, edge_sources, label, source):
     kind, arguments = CASES[label]
     if source == "crossmatch":
-        table = crossmatch(surveys, mode=mode(kind, arguments), **SETTINGS).table
+        table = crossmatch(surveys, mode=mode(kind, arguments), **SETTINGS)
     else:
-        table = resolve(edge_sources[source], mode(kind, arguments)).table
+        table = resolve(edge_sources[source], mode(kind, arguments))
     expected = in_entity_order(
         {
             key.removeprefix(f"{label}/"): value
