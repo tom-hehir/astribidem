@@ -18,10 +18,9 @@ transitive; angular proximity is not.
 
 ```python
 import pyarrow as pa
-from astro_crossmatch import UIDLink, SpatialLink, match_hub_and_spoke
+from astro_crossmatch import UIDLink, SpatialLink, match_hub_and_spoke, rows_to_ids
 
-matches = match_hub_and_spoke(
-    {
+catalogs = {
         "labels": pa.table({
             "id": [10, 20], "uid": [101, 102],
             "ra": [10.0, 20.0], "dec": [0.0, 0.0],
@@ -30,17 +29,24 @@ matches = match_hub_and_spoke(
         "images": pa.table({
             "id": [300], "ra": [10.0001], "dec": [0.0],
         }),
-    },
+}
+matches = match_hub_and_spoke(
+    catalogs,
     anchor="labels",
     links={"spectra": UIDLink(), "images": SpatialLink(1.0)},
     dedupe_radius_arcsec={"labels": 0.0, "images": 0.0},
 )
+# entity_id | labels/row_index | spectra/row_index | images/row_index
+#         0 |                0 |                 1 |                0
+
+matches = rows_to_ids(matches, {name: table["id"] for name, table in catalogs.items()})
 # entity_id | labels/id | spectra/id | images/id
 #         0 |        10 |        100 |       300
 ```
 
-Tables require unique non-null integer or string `id` columns. UID links use
-`uid`, falling back to `id` when absent. Keys keep the existing exact integer/
+The result refers to rows: row `i` of a source is its table's `i`-th row.
+`rows_to_ids` maps rows to any ID column. UID links use a table's `uid` column,
+falling back to `id` when absent. Keys keep the existing exact integer/
 string semantics and duplicate/null rejection. This first interface provides one
 shared UID field per source, including the anchor; it does not support different
 anchor key columns for different UID links or composite keys.
@@ -68,7 +74,8 @@ behavior is unchanged, including the existing N-way spatial all-pairs contract.
 A configuration containing only one link type still follows this explicitly
 anchor-based composition contract.
 
-The result contains consecutive int64 `entity_id` and original typed source IDs.
+The result contains consecutive int64 `entity_id` and one int64
+`<source>/row_index` column per table.
 Link policies, UID types, spatial dedupe outcomes and pre-intersection match
 counts are recorded in `astro_crossmatch.resolved_config` schema metadata. This
 API emits no separation columns.
@@ -85,8 +92,8 @@ arrays rather than this typed-ID product.
 The implementation lives in `hub_and_spoke.py` and calls the existing matchers.
 Arrow IDs/UIDs stay native. Spatial links match row positions, so spatial
 matching never sees the IDs. Spatial dedupe keeps the lowest row of each
-duplicate group and therefore follows the catalog's row order. Original IDs are
-gathered into the final table.
+duplicate group and therefore follows the catalog's row order. The final table
+holds the matched rows, like every other matcher.
 
 All matching remains in memory. Spatial links currently execute sequentially;
 `workers` controls the existing spatial matcher within each link. Repeated
@@ -96,8 +103,7 @@ exact identity, dedupe and order; realistic hub-and-spoke build performance is
 not yet benchmarked.
 
 The independent-link composition follows AstroBench's mixed MMU workflow. Unlike
-its positional result/first-link ordering, this API exposes typed stable IDs in
-anchor input order. HF scanning, persistence and payload materialization remain
+its first-link ordering, this API returns rows in anchor input order. HF scanning, persistence and payload materialization remain
 responsibilities of `hf-crossmatch`.
 
 ## Renaming from the original interface
