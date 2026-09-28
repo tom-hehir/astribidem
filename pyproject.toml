@@ -17,8 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8", "astropy>=6"]
-dev = ["pytest>=8", "astropy>=6", "ruff>=0.9"]
+# Sorting large saved edges' indexes (resolve_to_file).
+large = ["duckdb>=1.4"]
+test = ["pytest>=8", "astropy>=6", "duckdb>=1.4"]
+dev = ["pytest>=8", "astropy>=6", "duckdb>=1.4", "ruff>=0.9"]
 
 [project.urls]
 Repository = "https://github.com/tom-hehir/astro-crossmatch"

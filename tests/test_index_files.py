@@ -63,12 +63,12 @@ def banded(tmp_path_factory):
 
 
 @pytest.mark.parametrize("mode", MODES)
-@pytest.mark.parametrize("batch_rows", [7, 65_536])
+@pytest.mark.parametrize(("memory_limit", "threads"), [(None, None), ("64MB", 1)])
 def test_merged_index_equals_resolving_everything_at_once(
-    banded, tmp_path, mode, batch_rows
+    banded, tmp_path, mode, memory_limit, threads
 ):
     path = tmp_path / "index.parquet"
-    resolve_to_file(banded, mode, path, batch_rows=batch_rows)
+    resolve_to_file(banded, mode, path, memory_limit=memory_limit, threads=threads)
     expected = resolve(read_edges(banded), mode).table
     assert pq.read_table(path).equals(expected, check_metadata=True)
     assert not list(tmp_path.glob(".*"))  # the per-segment files are removed
@@ -116,26 +116,9 @@ def test_single_segment_edges_resolve_to_the_same_index(tmp_path):
     )
 
 
-_PEAK_SCRIPT = """
-import sys
-import pyarrow as pa
-from astro_crossmatch import EntitywiseCrossmatchConfig
-from astro_crossmatch.edge_files import segment_names
-from astro_crossmatch.index_files import resolve_to_file
-
-edges, path, batch_rows = sys.argv[1:]
-resolve_to_file(
-    edges, EntitywiseCrossmatchConfig(), path, batch_rows=int(batch_rows)
-)
-print(pa.default_memory_pool().max_memory())
-"""
-
-
-def test_merge_memory_stays_near_one_batch_across_many_segments(tmp_path):
-    import subprocess
-
+def test_scattered_segments_sort_correctly_within_a_small_memory_limit(tmp_path):
     # Rows arrive in random sky order, so every band segment's rows are
-    # scattered over the whole row range: the case a per-segment batch misses.
+    # scattered over the whole row range.
     rng = np.random.default_rng(3)
     n = 60_000
     ra, dec = rng.uniform(0, 2, n), rng.uniform(-2, 2, n)
@@ -152,16 +135,12 @@ def test_merge_memory_stays_near_one_batch_across_many_segments(tmp_path):
     build_edges_by_band(
         layout, edges, radius_arcsec=2.0, dedupe_radius_arcsec={"a": 0.0, "b": 0.0}
     )
-    index = resolve(read_edges(edges), EntitywiseCrossmatchConfig()).table
     assert len(segment_names(edges)) > 100
-    peak = int(
-        subprocess.run(
-            [sys.executable, "-c", _PEAK_SCRIPT, edges, tmp_path / "i.parquet", "2048"],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
-    )
-    assert pq.read_table(tmp_path / "i.parquet").equals(index, check_metadata=True)
-    # The old per-segment Parquet merge peaked at several times the index.
-    assert peak < index.nbytes / 2
+    mode = EntitywiseCrossmatchConfig()
+    path = tmp_path / "index.parquet"
+    resolve_to_file(edges, mode, path, memory_limit="32MB", threads=1)
+    expected = resolve(read_edges(edges), mode).table
+    assert pq.read_table(path).equals(expected, check_metadata=True)
+    with pytest.raises(MemoryError, match="raise memory_limit or lower threads"):
+        resolve_to_file(edges, mode, path, memory_limit="1MB", threads=1)
+    assert not list(tmp_path.glob(".*"))  # scratch files are removed either way

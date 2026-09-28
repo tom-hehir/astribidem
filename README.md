@@ -147,7 +147,8 @@ building, use `build_edges`, `resolve`, `write_edges`, `read_edges` and
 component statistics. See [candidate edges](docs/candidate-edges.md).
 For catalogs larger than memory, `write_band_layout` and `build_edges_by_band`
 build the same edges one declination band at a time, and `resolve_to_file`
-resolves them segment by segment into one index file; see
+resolves them segment by segment into one index file, sorted with the optional
+DuckDB dependency (`astro-crossmatch[large]`); see
 [candidate edges](docs/candidate-edges.md#build-edges-band-by-band) and the
 [banded edge build design](docs/design/banded-edge-builds.md).
 
