@@ -28,7 +28,7 @@ from astro_crossmatch.regions import (
 
 FIXTURES = Path(__file__).with_name("fixtures")
 sys.path.insert(0, str(FIXTURES))
-from aion_parity_cases import (  # noqa: E402
+from aion_parity_cases import (
     DEDUPE_RADIUS_ARCSEC,
     PAIR_RADIUS_OVERRIDE,
     RADIUS_ARCSEC,
@@ -114,7 +114,7 @@ def in_memory(catalogs, **settings):
 
 @pytest.mark.parametrize("band_height_arcsec", [1.0, 3.0, 20.0, 330.0])
 def test_band_build_reproduces_the_in_memory_edges(band_height_arcsec):
-    combined, segments, boundary = banded_edges(
+    combined, _, boundary = banded_edges(
         PARITY_CATALOGS, band_height_arcsec * ARCSEC, **PARITY_SETTINGS
     )
     assert_same_edges(combined, in_memory(PARITY_CATALOGS, **PARITY_SETTINGS))

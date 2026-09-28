@@ -28,6 +28,7 @@ from astro_crossmatch import (
     survey_coords_from_arrays,
     write_edges,
 )
+from astro_crossmatch.banded import as_chunks, build_edges_by_band, write_band_layout
 from astro_crossmatch.modes import entity_order
 
 FIXTURES = Path(__file__).with_name("fixtures")
@@ -89,14 +90,30 @@ def edge_sources(surveys, tmp_path_factory):
     write_edges(in_memory, saved)
     streamed = tmp_path_factory.mktemp("streamed")
     build_edges_to_directory(surveys, streamed, workers=3, chunk_rows=500, **SETTINGS)
+    layout = tmp_path_factory.mktemp("layout")
+    write_band_layout(
+        layout,
+        {
+            name: as_chunks(
+                EXPECTED[f"input/{name}/ra"], EXPECTED[f"input/{name}/dec"], 900
+            )
+            for name in SURVEYS
+        },
+        band_height_deg=3.0 / 3600,
+    )
+    banded = tmp_path_factory.mktemp("banded")
+    build_edges_by_band(layout, banded, **SETTINGS)
     return {
         "in_memory": in_memory,
         "saved": read_edges(saved),
         "streamed": read_edges(streamed),
+        "banded": read_edges(banded),
     }
 
 
-@pytest.mark.parametrize("source", ["crossmatch", "in_memory", "saved", "streamed"])
+@pytest.mark.parametrize(
+    "source", ["crossmatch", "in_memory", "saved", "streamed", "banded"]
+)
 @pytest.mark.parametrize("label", CASES)
 def test_reproduces_aion_output(surveys, edge_sources, label, source):
     kind, arguments = CASES[label]

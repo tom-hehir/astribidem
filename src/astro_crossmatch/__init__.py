@@ -2,6 +2,13 @@
 
 from astro_crossmatch.api import crossmatch, resolve, rows_to_ids
 from astro_crossmatch.audit import audit_edges
+from astro_crossmatch.banded import (
+    build_band,
+    build_edges_by_band,
+    prepare_band_build,
+    sweep_boundaries,
+    write_band_layout,
+)
 from astro_crossmatch.candidate_edges import (
     CandidateEdges,
     DedupeOutcome,
@@ -42,18 +49,23 @@ __all__ = [
     "SurveyCoords",
     "UIDLink",
     "audit_edges",
+    "build_band",
     "build_edges",
+    "build_edges_by_band",
     "build_edges_to_directory",
     "combine_segments",
     "crossmatch",
     "match_hub_and_spoke",
     "match_uids",
+    "prepare_band_build",
     "read_edges",
     "read_segment",
     "resolve",
     "rows_to_ids",
     "segment_names",
     "survey_coords_from_arrays",
+    "sweep_boundaries",
+    "write_band_layout",
     "write_edges",
     "write_segment",
 ]

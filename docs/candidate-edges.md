@@ -104,6 +104,51 @@ Streaming bounds only the edges. Every survey's coordinates, KD-tree and dedupe
 results stay in memory for the whole build, at roughly 50 bytes per row.
 Resolution later loads all edges of the surveys it uses, but no coordinates.
 
+## Build edges band by band
+
+When coordinates and KD-trees do not fit in memory, build the edges one
+declination band at a time. The build first streams every survey's
+coordinates into a layout grouped by band:
+
+```python
+from astro_crossmatch import build_edges_by_band, write_band_layout
+from astro_crossmatch.banded import as_chunks
+
+write_band_layout(
+    "layout-directory",
+    {"a": chunks_a, "b": chunks_b},   # iterables of (ra, dec) chunks, in row order
+    band_height_deg=0.1,
+)
+build_edges_by_band(
+    "layout-directory",
+    "edges-directory",
+    radius_arcsec=1.0,
+    dedupe_radius_arcsec={"a": 0.5, "b": 0.0},
+)
+```
+
+`as_chunks(ra, dec, chunk_rows)` splits in-memory arrays into chunks. The layout
+costs 24 bytes per row per survey on disk and can be deleted after the build.
+
+Each band task loads its band plus the rows within the largest radius of its
+two boundaries. It saves the groups of rows that lie wholly inside the band as
+segment `band-<k>` and hands over the groups that reach a boundary. A sweep
+over the boundaries, from south to north, completes those groups and saves
+them as segments `boundary-<k>`. The saved edges equal `build_edges` on the
+same coordinates exactly, and each segment can be resolved on its own.
+
+The band height must exceed the largest pair or dedupe radius. Memory scales
+with the rows in the largest band; the share of rows handed to the sweep is
+about twice the largest radius divided by the band height. `band_processes`
+runs band tasks in parallel processes. `max_carried_rows` makes the sweep fail
+loudly when groups span many bands, which happens only when the radius is too
+large for the source density.
+
+For separate processes, such as a job array, `prepare_band_build` records the
+settings and returns the bands, `build_band(edges_directory, band)` builds one
+band, and `sweep_boundaries(edges_directory)` finishes the build once every
+band has run.
+
 ## Audit the edges
 
 ```python
