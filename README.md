@@ -42,7 +42,9 @@ index = rows_to_ids(result.table, {"a": [101, 102], "b": ["b-201", "b-202"]})
 ```
 
 Every index column refers to rows: row `i` of a survey is the `i`-th coordinate
-passed in, and a null row means the survey is absent. Use the rows directly for
+passed in, and a null row means the survey is absent. Entities are ordered by
+their first present survey, in the order the surveys were passed, and then by
+that survey's row. Use the rows directly for
 positional access, such as `table.take(index["a/row_index"])`, or map them to
 IDs with `rows_to_ids`, which indexes each ID array by the rows. Pass one ID
 per input row, in the same order as the coordinates; the IDs are not checked,

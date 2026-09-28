@@ -2,11 +2,19 @@
 
 from astro_crossmatch.api import crossmatch, resolve, rows_to_ids
 from astro_crossmatch.audit import audit_edges
-from astro_crossmatch.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
+from astro_crossmatch.candidate_edges import (
+    CandidateEdges,
+    DedupeOutcome,
+    PairEdges,
+    combine_segments,
+)
 from astro_crossmatch.edge_files import (
     build_edges_to_directory,
     read_edges,
+    read_segment,
+    segment_names,
     write_edges,
+    write_segment,
 )
 from astro_crossmatch.edges import SurveyCoords, build_edges, survey_coords_from_arrays
 from astro_crossmatch.hub_and_spoke import SpatialLink, UIDLink, match_hub_and_spoke
@@ -36,12 +44,16 @@ __all__ = [
     "audit_edges",
     "build_edges",
     "build_edges_to_directory",
+    "combine_segments",
     "crossmatch",
     "match_hub_and_spoke",
     "match_uids",
     "read_edges",
+    "read_segment",
     "resolve",
     "rows_to_ids",
+    "segment_names",
     "survey_coords_from_arrays",
     "write_edges",
+    "write_segment",
 ]

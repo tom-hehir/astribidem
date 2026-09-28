@@ -85,14 +85,18 @@ def test_saved_files_hold_rows_dedupe_outcomes_and_settings(tmp_path):
             {"surveys": ["a", "c"], "radius_arcsec": 0.8},
             {"surveys": ["b", "c"], "radius_arcsec": 1.0},
         ],
+        "segments": ["segment-0"],
     }
-    assert pq.read_table(tmp_path / "deduplication" / "a.parquet").to_pydict() == {
+    segment = tmp_path / "segment-0"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["metadata.json", "segment-0"]
+    assert sorted(p.name for p in segment.iterdir()) == ["deduplication", "edges"]
+    assert pq.read_table(segment / "deduplication" / "a.parquet").to_pydict() == {
         "row": [1, 2, 3, 4, 5],
         "status": ["dropped", "dropped", "disputed", "disputed", "disputed"],
         "kept_row": [0, 0, None, None, None],
     }
-    assert pq.read_table(tmp_path / "deduplication" / "b.parquet").num_rows == 0
-    edges = pq.read_table(tmp_path / "edges" / "a__b.parquet")
+    assert pq.read_table(segment / "deduplication" / "b.parquet").num_rows == 0
+    edges = pq.read_table(segment / "edges" / "a__b.parquet")
     assert edges.column_names == ["row_a", "row_b", "separation_arcsec"]
     assert edges["row_a"].to_pylist() == [0, 6]
     assert edges["row_b"].to_pylist() == [0, 2]
@@ -177,3 +181,97 @@ def test_writers_refuse_colliding_pair_file_names(tmp_path):
         write_edges(build_edges(surveys, **settings), tmp_path)
     with pytest.raises(ValueError, match="share an edge file name"):
         build_edges_to_directory(surveys, tmp_path, **settings)
+
+
+def restrict(edges, rows_by_survey):
+    """The segment of ``edges`` covering the given rows of each survey."""
+    from astro_crossmatch import CandidateEdges, DedupeOutcome, PairEdges
+
+    surveys = []
+    for survey in edges.surveys:
+        rows = np.asarray(rows_by_survey[survey.name], dtype=np.int64)
+        keep = np.isin(survey.dropped_rows, rows)
+        surveys.append(
+            DedupeOutcome(
+                name=survey.name,
+                n_rows=survey.n_rows,
+                dedupe_radius_arcsec=survey.dedupe_radius_arcsec,
+                dropped_rows=survey.dropped_rows[keep],
+                kept_rows=survey.kept_rows[keep],
+                disputed_rows=survey.disputed_rows[np.isin(survey.disputed_rows, rows)],
+                rows=rows,
+            )
+        )
+    pairs = {}
+    for key, pair in edges.pairs.items():
+        keep = np.isin(pair.row_a, rows_by_survey[pair.survey_a])
+        pairs[key] = PairEdges(
+            pair.survey_a,
+            pair.survey_b,
+            pair.radius_arcsec,
+            pair.row_a[keep],
+            pair.row_b[keep],
+            pair.separation_arcsec[keep],
+        )
+    return CandidateEdges(surveys=tuple(surveys), pairs=pairs)
+
+
+# Two sky patches 1 degree apart: rows of each patch form separate segments.
+PATCHES = [
+    survey("a", [0.0, 0.1, 0.2, 10.0, 10.4, 10.8, 3600.0, 3600.1, 3610.0]),
+    survey("b", [0.3, 10.6, 3600.2, 3610.6, 3630.0]),
+    survey("c", [0.25, 3600.15]),
+]
+PATCH_ROWS = [
+    {"a": [0, 1, 2, 3, 4, 5], "b": [0, 1], "c": [0]},
+    {"a": [6, 7, 8], "b": [2, 3, 4], "c": [1]},
+]
+
+
+def test_combined_segments_equal_the_whole_build():
+    edges = build_edges(PATCHES, **SETTINGS)
+    segments = [restrict(edges, rows) for rows in PATCH_ROWS]
+    from astro_crossmatch import combine_segments
+
+    assert_same_edges(combine_segments(segments), edges)
+
+
+def test_segments_save_their_rows_and_reload(tmp_path):
+    from astro_crossmatch import read_segment, segment_names, write_segment
+    from astro_crossmatch.edge_files import write_metadata
+
+    edges = build_edges(PATCHES, **SETTINGS)
+    segments = [restrict(edges, rows) for rows in PATCH_ROWS]
+    for name, segment in zip(["band-0", "band-1"], segments):
+        write_segment(tmp_path, name, segment)
+    write_metadata(
+        tmp_path,
+        edges.surveys,
+        [(p.survey_a, p.survey_b, p.radius_arcsec) for p in edges.pairs.values()],
+        ["band-0", "band-1"],
+    )
+    assert segment_names(tmp_path) == ["band-0", "band-1"]
+    assert sorted(p.name for p in (tmp_path / "band-1").iterdir()) == [
+        "deduplication",
+        "edges",
+        "rows",
+    ]
+    assert pq.read_table(tmp_path / "band-1" / "rows" / "a.parquet")[
+        "row"
+    ].to_pylist() == [6, 7, 8]
+    assert_same_edges(read_segment(tmp_path, "band-1"), segments[1])
+    assert_same_edges(read_edges(tmp_path), edges)
+
+
+def test_resolving_segments_separately_gives_the_same_entities():
+    edges = build_edges(PATCHES, **SETTINGS)
+    segments = [restrict(edges, rows) for rows in PATCH_ROWS]
+    for mode in (
+        EntitywiseCrossmatchConfig(),
+        EntitywiseCrossmatchConfig(resolver="split"),
+        DegenerateCrossmatchConfig(surveys=["a", "b"]),
+    ):
+        whole = resolve(edges, mode).table
+        parts = [resolve(segment, mode).table for segment in segments]
+        split = sorted(json.dumps(r) for part in parts for r in part.to_pylist())
+        assert split == sorted(json.dumps(r) for r in whole.to_pylist())

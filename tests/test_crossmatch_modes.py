@@ -285,3 +285,25 @@ def test_entitywise_validation():
         EntitySelectionConfig(min_surveys=0)
     with pytest.raises(ValueError, match="duplicate"):
         EntitySelectionConfig(must_include_surveys=["a", "a"])
+
+
+def test_entitywise_orders_entities_by_first_present_survey_then_row():
+    # P=a0, Q=a1, R=(a2, b3), S=(a4, b1), T=b0; row a3 and b2 are dedupe-disputed.
+    inputs = _inputs(
+        {"a": 5, "b": 4},
+        {("a", "b"): ([2, 4], [3, 1], [0.1, 0.1])},
+        disputed={"a": [3], "b": [2]},
+    )
+    table = EntitywiseCrossmatchConfig().build(inputs).table
+    assert list(
+        zip(table["a/row_index"].to_pylist(), table["b/row_index"].to_pylist())
+    ) == [(0, None), (1, None), (2, 3), (3, None), (4, 1), (None, 0), (None, 2)]
+    assert table["disputed_reason"].to_pylist() == [
+        None,
+        None,
+        None,
+        "dedupe_disputed",
+        None,
+        None,
+        "dedupe_disputed",
+    ]
