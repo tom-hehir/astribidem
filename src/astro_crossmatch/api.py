@@ -48,7 +48,9 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> ModeResult:
 
     The result contains int64 ``<survey>/row_index`` columns (row ``i`` is the
     survey's ``i``-th coordinate; null when absent), optional separations or
-    dispute reasons, and policy/provenance metadata. Use ``rows_to_ids`` to
+    dispute reasons, and metadata recording the configuration, dedupe
+    outcomes and the result summary, so a table saved with
+    ``pyarrow.parquet.write_table`` is complete. Use ``rows_to_ids`` to
     replace rows with caller IDs.
     """
     _check_mode_fits_edges(mode, edges)
@@ -84,6 +86,9 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> ModeResult:
     ).encode()
     metadata[b"astro_crossmatch.dedupe"] = json.dumps(
         outcomes, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode()
+    metadata[b"astro_crossmatch.summary"] = json.dumps(
+        result.summary, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
     return ModeResult(result.table.replace_schema_metadata(metadata), result.summary)
 

@@ -54,6 +54,23 @@ float64: matching always computes in float64, and float32 or float16 inputs
 trigger a warning because their rounding already limits positional accuracy
 (float32 RA is spaced up to 0.11 arcsec apart near 360 deg).
 
+## Save and reload an index
+
+An index is an ordinary Arrow table, so save it as Parquet:
+
+```python
+import pyarrow.parquet as pq
+
+pq.write_table(result.table, "index.parquet")
+index = pq.read_table("index.parquet")
+```
+
+Its schema metadata records the matching configuration
+(`astro_crossmatch.resolved_config`), per-survey dedupe outcomes
+(`astro_crossmatch.dedupe`), mode settings and the result summary
+(`astro_crossmatch.summary`, the same counts as `result.summary`), so the saved
+file is self-describing. Tables from `rows_to_ids` keep that metadata.
+
 ## Match exact UIDs
 
 ```python
