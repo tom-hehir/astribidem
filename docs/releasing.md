@@ -34,6 +34,10 @@ alongside the build and starting tests once the distributions are available.
 `release.yml` calls that same pipeline before publishing; the three reusable
 workflows do not run independently on repository events.
 
+External Actions are pinned to exact commit SHAs; comments record their version
+labels. To update an Action, resolve the intended release in its official
+repository, update the SHA and comment together, and verify CI on the PR.
+
 ## One-time Trusted Publisher registration
 
 Create a pending publisher for the new project in each registry you will use.
