@@ -115,7 +115,8 @@ typed ID columns. The richer spatial `crossmatch` modes and N-source
 `crossmatch` builds candidate edges and resolves them in one call. To resolve
 the same edges under several modes, save them, or stream them to disk while
 building, use `build_edges`, `resolve`, `write_edges`, `read_edges` and
-`build_edges_to_directory`; see [candidate edges](docs/candidate-edges.md).
+`build_edges_to_directory`; `audit_edges` summarises dedupe, pair and
+component statistics. See [candidate edges](docs/candidate-edges.md).
 Coordinates and KD-trees are always held in memory. This package is not yet a
 distributed or out-of-core survey processing engine.
 

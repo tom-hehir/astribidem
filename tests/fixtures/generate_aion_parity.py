@@ -10,11 +10,13 @@ contested components. Inputs and outputs are both stored, so the test does
 not depend on NumPy's random stream.
 """
 
+import json
 import sys
 from itertools import combinations
 from pathlib import Path
 
 import numpy as np
+from aion2.token_materialization.crossmatch.audit import compute_audit
 from aion2.token_materialization.crossmatch.candidate_edges import build_edges
 from aion2.token_materialization.crossmatch.candidate_edges.coordinates import (
     survey_coords_from_arrays,
@@ -108,6 +110,13 @@ def main(aion_commit):
         name: survey_coords_from_arrays(name, *catalogs[name]) for name in SURVEYS
     }
     arrays = {"aion_commit": np.array(aion_commit)}
+    # AION-2's audit of the complete edge build; dedupe separations are
+    # AION-only and omitted.
+    audit = compute_audit(build_edges(config, coords=coords))
+    for pair in audit["pairs"]:
+        pair["separation_arcsec"] = pair.pop("sep_arcsec")
+    arrays["audit/pairs"] = np.array(json.dumps(audit["pairs"]))
+    arrays["audit/components"] = np.array(json.dumps(audit["components"]))
     for name, (ra, dec) in catalogs.items():
         arrays[f"input/{name}/ra"] = ra
         arrays[f"input/{name}/dec"] = dec
