@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from astribidem.kernel import (
     CatalogKernel,
     arcsec_to_chord,

@@ -1,0 +1,141 @@
+name: Checks
+
+on:
+  workflow_call:
+    inputs:
+      release-tag:
+        description: Optional release tag; must equal v plus the package version
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install development tools
+        run: uv sync --locked --extra dev
+      - name: Run pre-commit
+        run: uv run --no-sync pre-commit run --all-files
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --locked --extra dev
+      - name: Check release version
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: uv run --no-sync python scripts/check_release.py "$RELEASE_TAG"
+      - name: Build sdist and wheel from the sdist
+        run: uv build
+      - name: Check package metadata and README rendering
+        run: uv run --no-sync twine check --strict dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-distributions
+          path: dist/*
+          if-no-files-found: error
+
+  tests:
+    needs: build
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }}, ${{ matrix.dependencies }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, python: "3.11", dependencies: minimum}
+          - {os: ubuntu-latest, python: "3.11", dependencies: latest}
+          - {os: ubuntu-latest, python: "3.12", dependencies: latest}
+          - {os: ubuntu-latest, python: "3.13", dependencies: latest}
+          - {os: ubuntu-latest, python: "3.14", dependencies: latest}
+          - {os: macos-latest, python: "3.13", dependencies: latest}
+          - {os: windows-latest, python: "3.13", dependencies: latest}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            tests/minimum-requirements.txt
+      - uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Install the built wheel in an isolated environment
+        env:
+          DEPENDENCIES: ${{ matrix.dependencies }}
+        run: |
+          uv venv .ci-venv
+          constraints=()
+          if [[ "$DEPENDENCIES" == minimum ]]; then
+            constraints=(--constraint tests/minimum-requirements.txt)
+          fi
+          wheel=(dist/*.whl)
+          uv pip install --python .ci-venv "${wheel[0]}[test]" coverage "${constraints[@]}"
+          uv run --no-project --python .ci-venv python -c "import astribidem; assert 'site-packages' in astribidem.__file__, astribidem.__file__"
+      - name: Run tests against the installed wheel
+        run: uv run --no-project --python .ci-venv coverage run -m pytest --durations=15 --durations-min=1
+      - name: Report coverage
+        if: ${{ always() && hashFiles('.coverage') != '' }}
+        run: |
+          uv run --no-project --python .ci-venv coverage xml
+          uv run --no-project --python .ci-venv coverage report
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() && hashFiles('coverage.xml') != '' }}
+        with:
+          name: coverage-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.dependencies }}
+          path: coverage.xml
+
+  install-contract:
+    needs: build
+    name: Install contract (${{ matrix.extra }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        extra: [base, large]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Install and exercise only the requested dependencies
+        env:
+          EXTRA: ${{ matrix.extra }}
+        run: |
+          uv venv .ci-venv
+          wheel=(dist/*.whl)
+          requirement="${wheel[0]}"
+          if [[ "$EXTRA" == large ]]; then requirement+="[large]"; fi
+          uv pip install --python .ci-venv "$requirement"
+          uv run --no-project --python .ci-venv python scripts/smoke_install.py "$EXTRA"

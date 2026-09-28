@@ -24,6 +24,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from astribidem._formats import check_file_metadata, file_metadata
 from astribidem.candidate_edges import (
     CandidateEdges,
     DedupeOutcome,
@@ -91,6 +92,7 @@ def write_metadata(
     if len(set(segments)) != len(segments):
         raise ValueError("segment names must be unique")
     metadata = {
+        **file_metadata("edges"),
         "surveys": [
             {
                 "name": survey.name,
@@ -111,7 +113,9 @@ def write_metadata(
 
 def read_metadata(directory: str | Path) -> dict:
     """The contents of a saved edge directory's ``metadata.json``."""
-    return json.loads((Path(directory) / "metadata.json").read_text())
+    metadata = json.loads((Path(directory) / "metadata.json").read_text())
+    check_file_metadata(metadata, "edges")
+    return metadata
 
 
 def _write_dedupe(segment: Path, survey: DedupeOutcome) -> None:

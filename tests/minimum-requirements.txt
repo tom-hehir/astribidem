@@ -1,0 +1,8 @@
+# Exercise the oldest supported runtime APIs, independently of uv.lock.
+# SciPy 1.11.0 was yanked; 1.11.1 is the first supported 1.11 release.
+numpy==1.26.0
+scipy==1.11.1
+pyarrow==15.0.0
+duckdb==1.5.0
+astropy==6.0.0
+pytest==8.0.0

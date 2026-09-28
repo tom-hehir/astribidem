@@ -190,3 +190,33 @@ def test_saved_index_keeps_its_summary(tmp_path):
     path = tmp_path / "index.parquet"
     pq.write_table(result, path)
     assert index_summary(pq.read_table(path)) == index_summary(result)
+
+
+@pytest.mark.parametrize(
+    "ra,dec,message",
+    [
+        ([0.0], [100.0], "declination"),
+        ([0.0], [-90.00001], "declination"),
+        ([float("nan")], [0.0], "finite"),
+        ([0.0], [float("inf")], "finite"),
+    ],
+)
+@pytest.mark.parametrize("entry", ["arrays", "geometry", "banded"])
+def test_invalid_coordinates_fail_at_every_array_entry(
+    tmp_path, ra, dec, message, entry
+):
+    from astribidem import write_band_layout
+    from astribidem.geometry import crossmatch_radec
+
+    with pytest.raises(ValueError, match=message):
+        if entry == "arrays":
+            survey_coords_from_arrays("a", ra, dec)
+        elif entry == "geometry":
+            crossmatch_radec([(ra, dec), ([0.0], [0.0])], radius_arcsec=1.0)
+        else:
+            write_band_layout(tmp_path, {"a": [(ra, dec)]}, band_height_deg=1.0)
+
+
+def test_poles_and_wrapped_ra_remain_valid():
+    coords = survey_coords_from_arrays("a", [-1.0, 361.0], [-90.0, 90.0])
+    np.testing.assert_allclose(coords.xyz[:, 2], [-1.0, 1.0])

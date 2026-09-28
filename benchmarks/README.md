@@ -1,4 +1,9 @@
-# UID matching benchmark
+# Matching benchmarks
+
+For spatial matching, see the [in-memory versus banded benchmark](spatial.md),
+which records time and peak memory and verifies identical output indexes.
+
+## UID matching benchmark
 
 The [UID implementation decision](../docs/uid-matching.md) records a separate
 comparison of canonical Arrow, NumPy, pandas and Polars approaches, including

@@ -3,7 +3,9 @@
 Standalone astronomical crossmatching, extracted from Tom Hehir’s existing
 Astral and AstroBench implementations. Produces match indexes of row positions,
 optionally mapped to caller IDs, rather than downloading or joining scientific
-payloads. Private development repository.
+payloads. Alpha package: pin an exact version for reproducible applications.
+See the [matching guide](https://github.com/tom-hehir/astribidem/blob/main/docs/matching-guide.md), [API and compatibility](https://github.com/tom-hehir/astribidem/blob/main/docs/api-and-compatibility.md),
+and [release instructions](https://github.com/tom-hehir/astribidem/blob/main/docs/releasing.md).
 
 The name joins Latin *astrum* (“star”) and *ibidem* (“in the same place”).
 In footnotes, *ibid.* means “the same source as before”; a crossmatch decides
@@ -11,20 +13,26 @@ whether two catalogue rows are the same astronomical source.
 
 ## Install
 
-With GitHub credentials configured for this private repository:
+Install the alpha from PyPI:
 
 ```bash
-uv pip install "git+https://github.com/tom-hehir/astribidem.git"
+python -m pip install --pre astribidem
+# Optional sorting for large saved indexes:
+python -m pip install --pre "astribidem[large]"
 ```
 
-Pin an immutable commit in applications. Runtime dependencies are NumPy, SciPy
-and PyArrow. There is no Torch, Lightning, AION, Astral, HATS or LSDB dependency.
+For the first release, pin `astribidem==0.0.0a0` in applications. Runtime
+dependencies are NumPy, SciPy and PyArrow (Python 3.11+). There is no Torch,
+Lightning, AION, Astral, HATS or LSDB dependency.
 
 ## Match coordinate arrays
 
 ```python
 from astribidem import (
-    crossmatch, rows_to_ids, survey_coords_from_arrays, DegenerateCrossmatchConfig,
+    crossmatch,
+    rows_to_ids,
+    survey_coords_from_arrays,
+    DegenerateCrossmatchConfig,
 )
 
 sources = [
@@ -55,8 +63,10 @@ per input row, in the same order as the coordinates; the IDs are not checked,
 and their Arrow types are preserved.
 
 Dedupe radii are explicit per survey; zero opts out. Input coordinates must
-already have catalog-specific cleaning applied. Pass RA/Dec in degrees as
-float64: matching always computes in float64, and float32 or float16 inputs
+already have catalog-specific cleaning applied and share the appropriate
+celestial frame and epoch. No frame or proper-motion conversion is performed.
+Coordinates must be finite, with declination in [-90, 90]; RA may wrap.
+Pass RA/Dec in degrees as float64: matching always computes in float64, and float32 or float16 inputs
 trigger a warning because their rounding already limits positional accuracy
 (float32 RA is spaced up to 0.11 arcsec apart near 360 deg).
 
@@ -71,8 +81,8 @@ pq.write_table(rows, "index.parquet")
 index = pq.read_table("index.parquet")
 ```
 
-Its schema metadata records the matching configuration
-(`astribidem.resolved_config`), per-survey dedupe outcomes
+Its schema metadata records the index format and producer version,
+plus the matching configuration (`astribidem.resolved_config`), per-survey dedupe outcomes
 (`astribidem.dedupe`), mode settings and the result summary
 (`astribidem.summary`, read with `index_summary(rows)`), so the saved
 file is self-describing. Tables from `rows_to_ids` keep that metadata.
@@ -116,15 +126,15 @@ Keys and row lookups stay in native Arrow arrays and hash kernels; the matcher
 does not create a Python object per key. Integer types are normalized losslessly
 before comparison. Mixed signed/uint64 keys use fixed-width decimal128 with
 scale zero when no standard integer type can represent both domains. The
-[UID implementation decision](docs/uid-matching.md)
+[UID implementation decision](https://github.com/tom-hehir/astribidem/blob/main/docs/uid-matching.md)
 records the Arrow-native choice, requirements, alternatives and threading
-tradeoffs. See the [UID benchmark](benchmarks/README.md) for measured time and
+tradeoffs. See the [UID benchmark](https://github.com/tom-hehir/astribidem/blob/main/benchmarks/README.md) for measured time and
 memory use; native hash tables still consume memory.
 
 ## Scientific contracts
 
 For independent links to one anchor, use the separate
-[`match_hub_and_spoke` API](docs/hub-and-spoke-matching.md). Each link can use UID
+[`match_hub_and_spoke` API](https://github.com/tom-hehir/astribidem/blob/main/docs/hub-and-spoke-matching.md). Each link can use UID
 or spatial matching; all-UID, all-spatial and mixed-link configurations are
 supported. It intersects full-input link results, requiring every spoke to
 match the anchor without checking spoke-to-spoke relationships, and returns
@@ -148,24 +158,24 @@ row columns like every other matcher. The richer spatial `crossmatch` modes and 
 the same edges under several modes, save them, or stream them to disk while
 building, use `build_edges`, `resolve`, `write_edges`, `read_edges` and
 `build_edges_to_directory`; `audit_edges` summarises dedupe, pair and
-component statistics. See [candidate edges](docs/candidate-edges.md).
+component statistics. See [candidate edges](https://github.com/tom-hehir/astribidem/blob/main/docs/candidate-edges.md).
 For catalogs larger than memory, `write_band_layout` and `build_edges_by_band`
 build the same edges one declination band at a time, and `resolve_to_file`
 resolves them segment by segment into one index file, sorted with the optional
 DuckDB dependency (`astribidem[large]`); see
-[candidate edges](docs/candidate-edges.md#build-edges-band-by-band) and the
-[banded edge build design](docs/design/banded-edge-builds.md).
+[candidate edges](https://github.com/tom-hehir/astribidem/blob/main/docs/candidate-edges.md#build-edges-band-by-band) and the
+[banded edge build design](https://github.com/tom-hehir/astribidem/blob/main/docs/design/banded-edge-builds.md).
 
 ## Design proposals
 
-The [grouped UID/spatial design](docs/design/grouped-uid-spatial-matching.md)
+The [grouped UID/spatial design](https://github.com/tom-hehir/astribidem/blob/main/docs/design/grouped-uid-spatial-matching.md)
 records a deferred possible extension: select one representative position per
 UID-defined object, then apply richer spatial resolution and partial-membership
 policies without requiring a universal anchor. Current UID/spatial composition
 uses hub-and-spoke matching. The grouped design will only be implemented when a
 concrete use case needs it; no implementation or AION-2 integration is planned.
 
-The [banded edge build design](docs/design/banded-edge-builds.md) records the
+The [banded edge build design](https://github.com/tom-hehir/astribidem/blob/main/docs/design/banded-edge-builds.md) records the
 agreed plan for catalogs larger than memory: declination bands with a margin,
 deferral of groups that cross band boundaries to a sweep over the boundaries,
 and saved edges made of self-contained segments. It also records every option
@@ -175,14 +185,13 @@ implemented.
 ## Development
 
 ```bash
-uv venv
-uv pip install -e '.[dev]'
-uv run --no-project pytest
-uv run --no-project ruff check src tests
+uv sync --locked --extra dev
+uv run --no-sync pre-commit run --all-files
+uv run --no-sync pytest
 ```
 
 The inherited tests include independent brute-force and Astropy comparisons,
 threshold boundaries, dedupe, disputes, and N-way matching. The AION-2 parity
 test uses indexes recorded by `tests/fixtures/generate_aion_parity.py`, which
 runs in an AION-2 environment.
-See [provenance](docs/provenance.md).
+See [provenance](https://github.com/tom-hehir/astribidem/blob/main/docs/provenance.md).

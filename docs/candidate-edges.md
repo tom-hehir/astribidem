@@ -13,7 +13,10 @@ later.
 
 ```python
 from astribidem import (
-    DegenerateCrossmatchConfig, EntitywiseCrossmatchConfig, build_edges, resolve,
+    DegenerateCrossmatchConfig,
+    EntitywiseCrossmatchConfig,
+    build_edges,
+    resolve,
 )
 
 edges = build_edges(
@@ -116,7 +119,7 @@ from astribidem.banded import as_chunks
 
 write_band_layout(
     "layout-directory",
-    {"a": chunks_a, "b": chunks_b},   # iterables of (ra, dec) chunks, in row order
+    {"a": chunks_a, "b": chunks_b},  # iterables of (ra, dec) chunks, in row order
     band_height_deg=0.1,
 )
 build_edges_by_band(
@@ -201,4 +204,3 @@ A growing largest component warns that the radius is close to percolation. A
 clean component spanning surveys A and B is one row of a clean A x B product,
 so the combination counts size subset joins before building them. The census
 omits pairs that were not built; `all_pairs_built` is false in that case.
-

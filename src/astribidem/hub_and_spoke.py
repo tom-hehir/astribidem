@@ -12,6 +12,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
+from astribidem._formats import index_metadata
 from astribidem.api import crossmatch
 from astribidem.edges import survey_coords_from_arrays
 from astribidem.kernel import float64_coordinates, resolve_workers
@@ -222,8 +223,9 @@ def match_hub_and_spoke(
         columns[f"{name}/row_index"] = pc.cast(rows.pop(name), pa.int64())
     return pa.table(columns).replace_schema_metadata(
         {
+            **index_metadata(),
             b"astribidem.resolved_config": json.dumps(
                 configuration, sort_keys=True, separators=(",", ":"), allow_nan=False
-            ).encode()
+            ).encode(),
         }
     )

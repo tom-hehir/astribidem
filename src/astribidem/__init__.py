@@ -1,5 +1,6 @@
 """Exact astronomical crossmatching with row-position entity indexes."""
 
+from astribidem._formats import __version__
 from astribidem.api import crossmatch, resolve, rows_to_ids
 from astribidem.audit import audit_edges
 from astribidem.banded import (
@@ -37,6 +38,7 @@ from astribidem.modes import (
 from astribidem.uids import match_uids
 
 __all__ = [
+    "__version__",
     "CandidateEdges",
     "CatalogKernel",
     "CrossmatchModeConfig",

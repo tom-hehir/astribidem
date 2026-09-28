@@ -84,7 +84,13 @@ def float64_coordinates(
                 stacklevel=3,
             )
         converted.append(values.astype(np.float64, copy=False))
-    return converted[0], converted[1]
+    ra, dec = converted
+    where = f"survey {name!r}: " if name is not None else ""
+    if not (np.isfinite(ra).all() and np.isfinite(dec).all()):
+        raise ValueError(f"{where}coordinates must be finite")
+    if np.any((dec < -90.0) | (dec > 90.0)):
+        raise ValueError(f"{where}declination must be between -90 and 90 degrees")
+    return ra, dec
 
 
 def radec_to_xyz(

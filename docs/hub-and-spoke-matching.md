@@ -21,14 +21,22 @@ import pyarrow as pa
 from astribidem import UIDLink, SpatialLink, match_hub_and_spoke, rows_to_ids
 
 catalogs = {
-        "labels": pa.table({
-            "id": [10, 20], "uid": [101, 102],
-            "ra": [10.0, 20.0], "dec": [0.0, 0.0],
-        }),
-        "spectra": pa.table({"id": [200, 100], "uid": [102, 101]}),
-        "images": pa.table({
-            "id": [300], "ra": [10.0001], "dec": [0.0],
-        }),
+    "labels": pa.table(
+        {
+            "id": [10, 20],
+            "uid": [101, 102],
+            "ra": [10.0, 20.0],
+            "dec": [0.0, 0.0],
+        }
+    ),
+    "spectra": pa.table({"id": [200, 100], "uid": [102, 101]}),
+    "images": pa.table(
+        {
+            "id": [300],
+            "ra": [10.0001],
+            "dec": [0.0],
+        }
+    ),
 }
 matches = match_hub_and_spoke(
     catalogs,

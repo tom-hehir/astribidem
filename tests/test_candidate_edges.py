@@ -74,7 +74,12 @@ def test_resolving_built_edges_equals_crossmatch():
 
 def test_saved_files_hold_rows_dedupe_outcomes_and_settings(tmp_path):
     write_edges(build_edges(SURVEYS, **SETTINGS), tmp_path)
+    from astribidem import __version__
+
     assert json.loads((tmp_path / "metadata.json").read_text()) == {
+        "format": "astribidem.edges",
+        "format_version": 1,
+        "astribidem_version": __version__,
         "surveys": [
             {"name": "a", "n_rows": 7, "dedupe_radius_arcsec": 0.5},
             {"name": "b", "n_rows": 4, "dedupe_radius_arcsec": 0.0},

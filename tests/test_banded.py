@@ -29,7 +29,7 @@ from astribidem.banded import (
 
 FIXTURES = Path(__file__).with_name("fixtures")
 sys.path.insert(0, str(FIXTURES))
-from aion_parity_cases import (
+from aion_parity_cases import (  # noqa: E402 — fixture path is set above
     DEDUPE_RADIUS_ARCSEC,
     PAIR_RADIUS_OVERRIDE,
     RADIUS_ARCSEC,
