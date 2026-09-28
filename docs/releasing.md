@@ -40,51 +40,33 @@ repository, update the SHA and comment together, and verify CI on the PR.
 
 ## One-time Trusted Publisher registration
 
-Create a pending publisher for the new project in each registry you will use.
+Create a pending publisher in your [PyPI account](https://pypi.org/manage/account/publishing/).
 The first successful upload creates the project. Register these exact values:
 
-| Setting | PyPI | TestPyPI |
-| --- | --- | --- |
-| Project name | `astribidem` | `astribidem` |
-| GitHub owner | `tom-hehir` | `tom-hehir` |
-| Repository | `astribidem` | `astribidem` |
-| Workflow filename | `release.yml` | `release.yml` |
-| GitHub environment | `pypi` | `testpypi` |
+| Setting | Value |
+| --- | --- |
+| Project name | `astribidem` |
+| GitHub owner | `tom-hehir` |
+| Repository | `astribidem` |
+| Workflow filename | `release.yml` |
+| GitHub environment | `pypi` |
 
-The production and test registries have separate accounts and registrations.
-Use GitHub environments with those names; restrict their deployment policy to
-release tags (`v*`). No PyPI API token or repository secret is needed. See
+The GitHub environment `pypi` restricts deployments to release tags (`v*`).
+No PyPI API token or repository secret is needed. See
 [PyPI's pending-publisher instructions](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
 
 Ensure the package's documentation and issue-tracker links are publicly
 accessible before announcing a public release.
 
-## Rehearse on TestPyPI
+## Publish to PyPI
 
 1. Merge the release preparation and confirm CI is green.
 2. Check `pyproject.toml`, `CHANGELOG.md` and documentation for the intended
    version. The initial version is `0.0.0a0`.
 3. Create and push the immutable tag `v0.0.0a0` at the tested commit.
-4. Manually run **Release** from that tag. A manual run uploads only to
-   TestPyPI. Selecting a branch whose name does not match the version fails
-   the tag check.
-5. Install the TestPyPI distribution in a fresh environment and exercise a
-   spatial and UID example. Install dependencies from normal PyPI first;
-   then fetch only astribidem from TestPyPI:
+4. Publish a GitHub release for that tag, marking alpha versions as prereleases.
 
-```sh
-uv venv /tmp/astribidem-release-check
-uv pip install --python /tmp/astribidem-release-check numpy scipy pyarrow 'duckdb>=1.5'
-uv pip install --python /tmp/astribidem-release-check --no-deps \
-  --index-url https://test.pypi.org/simple/ 'astribidem==0.0.0a0'
-uv run --no-project --python /tmp/astribidem-release-check python -c \
-  'import astribidem; print(astribidem.__version__)'
-```
-
-## Publish to PyPI
-
-Publish a GitHub release for `v0.0.0a0`, marking it as a prerelease. The
-`release: published` event handles both prereleases and final releases.
+The `release: published` event handles both prereleases and final releases.
 Creating a tag or a draft GitHub release alone does not upload to PyPI.
 
 The release workflow checks that the tag exactly equals `v` plus the package
