@@ -195,3 +195,17 @@ def test_each_call_prepares_each_survey_once_and_retains_no_kernels(monkeypatch)
         assert all(ref() is None for ref in kernels)
     assert conversions == ["a", "b", "c", "a", "b", "c"]
     assert len(kernels) == 6
+
+
+@pytest.mark.parametrize("offsets,radius", [([0, 0], 0), ([], 1)])
+def test_geometry_dedupe_fast_path_needs_no_tree(monkeypatch, offsets, radius):
+    from astribidem.geometry import dedupe_radec
+
+    def unexpected_tree(*args, **kwargs):
+        pytest.fail("a no-op dedupe must not build a tree")
+
+    monkeypatch.setattr(kernel_module, "cKDTree", unexpected_tree)
+    outcome, active = dedupe_radec(*coordinates(offsets), radius, name="a")
+    assert outcome.n_rows == len(offsets)
+    assert outcome.n_dropped == outcome.n_disputed == 0
+    assert active.tolist() == [True] * len(offsets)
