@@ -30,6 +30,7 @@ from astro_crossmatch.kernel import (
     CatalogKernel,
     arcsec_to_chord,
     chord_to_arcsec,
+    float64_coordinates,
     radec_to_xyz,
 )
 from astro_crossmatch.modes import one_to_one_pairs
@@ -67,6 +68,7 @@ def radec_to_cartesian(
     Returns:
         An ``(..., 3)`` array of unit vectors.
     """
+    ra, dec = float64_coordinates(ra, dec)
     if not degrees:
         ra = np.rad2deg(ra)
         dec = np.rad2deg(dec)
@@ -302,8 +304,7 @@ def dedupe_and_crossmatch_radec(
     active_indices: list[np.ndarray] = []
     filtered: list[tuple[np.ndarray, np.ndarray]] = []
     for (ra, dec), name, dedupe_radius in zip(coords, names, dedupe_radii_arcsec):
-        ra = np.asarray(ra, dtype=np.float64)
-        dec = np.asarray(dec, dtype=np.float64)
+        ra, dec = float64_coordinates(ra, dec, name=name)
         outcome, active = dedupe_radec(ra, dec, dedupe_radius, name=name)
         outcomes.append(outcome)
         active_indices.append(np.flatnonzero(active))

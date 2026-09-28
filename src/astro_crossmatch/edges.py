@@ -19,7 +19,12 @@ from astro_crossmatch.graph import (
     component_sizes_and_edge_counts,
     connected_components,
 )
-from astro_crossmatch.kernel import CatalogKernel, radec_to_xyz, resolve_workers
+from astro_crossmatch.kernel import (
+    CatalogKernel,
+    float64_coordinates,
+    radec_to_xyz,
+    resolve_workers,
+)
 
 
 @dataclass(frozen=True)
@@ -38,9 +43,12 @@ def survey_coords_from_arrays(
     ra: np.ndarray,
     dec: np.ndarray,
 ) -> SurveyCoords:
-    """Build coordinates from RA/Dec degree arrays."""
-    ra = np.asarray(ra, dtype=np.float64)
-    dec = np.asarray(dec, dtype=np.float64)
+    """Build coordinates from RA/Dec degree arrays.
+
+    Coordinates become float64 before anything else; see
+    ``kernel.float64_coordinates``.
+    """
+    ra, dec = float64_coordinates(ra, dec, name=name)
     if ra.ndim != 1 or dec.ndim != 1:
         raise ValueError(f"survey {name!r}: ra/dec must be 1-D")
     if len(ra) != len(dec):

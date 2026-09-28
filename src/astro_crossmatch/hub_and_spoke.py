@@ -14,7 +14,7 @@ import pyarrow.compute as pc
 
 from astro_crossmatch.api import crossmatch
 from astro_crossmatch.edges import survey_coords_from_arrays
-from astro_crossmatch.kernel import resolve_workers
+from astro_crossmatch.kernel import float64_coordinates, resolve_workers
 from astro_crossmatch.modes import SUBSET_JOIN_POLICIES, DegenerateCrossmatchConfig
 from astro_crossmatch.uids import _identifiers, match_uids
 
@@ -54,16 +54,21 @@ def _spatial_input(name: str, table: pa.Table):
     """Coordinates for spatial matching, in the catalog's row order."""
     if not {"ra", "dec"} <= set(table.column_names):
         raise ValueError(f"spatial catalog {name!r} requires ra and dec columns")
-    coordinates = []
     for column in ("ra", "dec"):
-        values = pc.cast(table[column], pa.float64())
+        values = table[column]
+        if not (pa.types.is_floating(values.type) or pa.types.is_integer(values.type)):
+            raise ValueError(f"catalog {name!r}: {column} must be numeric")
         if values.null_count:
             raise ValueError(f"catalog {name!r}: {column} must be non-null")
-        numeric = values.to_numpy(zero_copy_only=False)
-        if not np.isfinite(numeric).all():
+    ra, dec = float64_coordinates(
+        table["ra"].to_numpy(zero_copy_only=False),
+        table["dec"].to_numpy(zero_copy_only=False),
+        name=name,
+    )
+    for column, values in (("ra", ra), ("dec", dec)):
+        if not np.isfinite(values).all():
             raise ValueError(f"catalog {name!r}: {column} must be finite")
-        coordinates.append(numeric)
-    return survey_coords_from_arrays(name, *coordinates)
+    return survey_coords_from_arrays(name, ra, dec)
 
 
 def match_hub_and_spoke(
