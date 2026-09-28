@@ -23,7 +23,7 @@ Run from the repository root with the package's dependencies installed:
 
 ```sh
 python benchmarks/benchmark_uids.py \
-  --module src/astro_crossmatch/uids.py \
+  --module src/astribidem/uids.py \
   --label native_arrays --output /tmp/uid-native.json
 ```
 
@@ -102,7 +102,7 @@ git show 80aedb8:src/astro_crossmatch/uids.py > /tmp/uids-before.py
 python benchmarks/benchmark_uid_acero.py \
   --module /tmp/uids-before.py --output /tmp/uids-before.json
 python benchmarks/benchmark_uid_acero.py \
-  --module src/astro_crossmatch/uids.py --output /tmp/uids-after.json
+  --module src/astribidem/uids.py --output /tmp/uids-after.json
 ```
 
 Compare the `strategy="current"` measurements in those files. The suite also

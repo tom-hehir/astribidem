@@ -18,7 +18,7 @@ transitive; angular proximity is not.
 
 ```python
 import pyarrow as pa
-from astro_crossmatch import UIDLink, SpatialLink, match_hub_and_spoke, rows_to_ids
+from astribidem import UIDLink, SpatialLink, match_hub_and_spoke, rows_to_ids
 
 catalogs = {
         "labels": pa.table({
@@ -77,7 +77,7 @@ anchor-based composition contract.
 The result contains consecutive int64 `entity_id` and one int64
 `<source>/row_index` column per table.
 Link policies, UID types, spatial dedupe outcomes and pre-intersection match
-counts are recorded in `astro_crossmatch.resolved_config` schema metadata. This
+counts are recorded in `astribidem.resolved_config` schema metadata. This
 API emits no separation columns.
 
 The main `crossmatch` API retains its richer spatial strategies, including
@@ -104,7 +104,7 @@ not yet benchmarked.
 
 The independent-link composition follows AstroBench's mixed MMU workflow. Unlike
 its first-link ordering, this API returns rows in anchor input order. HF scanning, persistence and payload materialization remain
-responsibilities of `hf-crossmatch`.
+responsibilities of `astribidem-hf`.
 
 ## Renaming from the original interface
 
@@ -114,10 +114,10 @@ Matching behavior is unchanged. The resolved-config provenance method is now
 `hub_and_spoke`, so saved workflow identities using the old method are
 different.
 
-`hf-crossmatch` now exposes `match_catalog_hub_and_spoke` and the
+`astribidem-hf` now exposes `match_catalog_hub_and_spoke` and the
 `hub_and_spoke` CLI method, with its dependency pinned to a core commit
 providing the renamed API. Its
-[migration guide](https://github.com/tom-hehir/hf-crossmatch/blob/5de543ac020e8a89854c2b97a1e0911772b362d4/docs/cli.md#migrating-the-original-anchor-link-interface)
+[migration guide](https://github.com/tom-hehir/astribidem-hf/blob/5de543ac020e8a89854c2b97a1e0911772b362d4/docs/cli.md#migrating-the-original-anchor-link-interface)
 covers the import and configuration changes and the new work directory needed
 for workflows saved under `mixed`.
 

@@ -13,13 +13,13 @@ from math import isfinite
 
 import numpy as np
 
-from astro_crossmatch.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
-from astro_crossmatch.graph import (
+from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
+from astribidem.graph import (
     clique_mask,
     component_sizes_and_edge_counts,
     connected_components,
 )
-from astro_crossmatch.kernel import (
+from astribidem.kernel import (
     CatalogKernel,
     float64_coordinates,
     radec_to_xyz,

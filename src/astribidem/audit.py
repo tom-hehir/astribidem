@@ -16,8 +16,8 @@ from typing import Any
 
 import numpy as np
 
-from astro_crossmatch.candidate_edges import CandidateEdges, DedupeOutcome
-from astro_crossmatch.graph import build_global_graph
+from astribidem.candidate_edges import CandidateEdges, DedupeOutcome
+from astribidem.graph import build_global_graph
 
 _SEPARATION_PERCENTILES = (5, 25, 50, 75, 95)
 _SIZE_HISTOGRAM_CAP = 6

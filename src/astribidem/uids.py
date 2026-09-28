@@ -207,7 +207,7 @@ def match_uids(
         "ordering": "anchor_then_source_input_order",
     }
     metadata = {
-        b"astro_crossmatch.resolved_config": json.dumps(
+        b"astribidem.resolved_config": json.dumps(
             provenance, sort_keys=True, separators=(",", ":"), allow_nan=False
         ).encode()
     }

@@ -7,7 +7,7 @@ import numpy as np
 import pyarrow.parquet as pq
 import pytest
 
-from astro_crossmatch import (
+from astribidem import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
@@ -15,9 +15,9 @@ from astro_crossmatch import (
     resolve,
     write_edges,
 )
-from astro_crossmatch.banded import as_chunks, build_edges_by_band, write_band_layout
-from astro_crossmatch.edge_files import segment_names
-from astro_crossmatch.index_files import resolve_to_file
+from astribidem.banded import as_chunks, build_edges_by_band, write_band_layout
+from astribidem.edge_files import segment_names
+from astribidem.index_files import resolve_to_file
 
 FIXTURES = Path(__file__).with_name("fixtures")
 sys.path.insert(0, str(FIXTURES))
@@ -97,7 +97,7 @@ def test_unsorted_index_holds_the_same_entities_in_segment_order(banded, tmp_pat
 
 
 def test_single_segment_edges_resolve_to_the_same_index(tmp_path):
-    from astro_crossmatch import build_edges, survey_coords_from_arrays
+    from astribidem import build_edges, survey_coords_from_arrays
 
     edges = build_edges(
         [

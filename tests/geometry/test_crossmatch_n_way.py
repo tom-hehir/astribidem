@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from astro_crossmatch.geometry import crossmatch_radec as crossmatch
+from astribidem.geometry import crossmatch_radec as crossmatch
 
 from . import _astropy_reference as astropy_ref
 from ._crossmatch_fixtures import (

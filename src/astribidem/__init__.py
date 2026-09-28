@@ -1,21 +1,21 @@
 """Exact astronomical crossmatching with row-position entity indexes."""
 
-from astro_crossmatch.api import crossmatch, resolve, rows_to_ids
-from astro_crossmatch.audit import audit_edges
-from astro_crossmatch.banded import (
+from astribidem.api import crossmatch, resolve, rows_to_ids
+from astribidem.audit import audit_edges
+from astribidem.banded import (
     build_band,
     build_edges_by_band,
     prepare_band_build,
     sweep_boundaries,
     write_band_layout,
 )
-from astro_crossmatch.candidate_edges import (
+from astribidem.candidate_edges import (
     CandidateEdges,
     DedupeOutcome,
     PairEdges,
     combine_segments,
 )
-from astro_crossmatch.edge_files import (
+from astribidem.edge_files import (
     build_edges_to_directory,
     read_edges,
     read_segment,
@@ -23,18 +23,18 @@ from astro_crossmatch.edge_files import (
     write_edges,
     write_segment,
 )
-from astro_crossmatch.edges import SurveyCoords, build_edges, survey_coords_from_arrays
-from astro_crossmatch.hub_and_spoke import SpatialLink, UIDLink, match_hub_and_spoke
-from astro_crossmatch.index_files import resolve_to_file
-from astro_crossmatch.kernel import CatalogKernel
-from astro_crossmatch.modes import (
+from astribidem.edges import SurveyCoords, build_edges, survey_coords_from_arrays
+from astribidem.hub_and_spoke import SpatialLink, UIDLink, match_hub_and_spoke
+from astribidem.index_files import resolve_to_file
+from astribidem.kernel import CatalogKernel
+from astribidem.modes import (
     CrossmatchModeConfig,
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
     index_summary,
 )
-from astro_crossmatch.uids import match_uids
+from astribidem.uids import match_uids
 
 __all__ = [
     "CandidateEdges",

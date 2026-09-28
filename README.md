@@ -1,16 +1,20 @@
-# astro-crossmatch
+# astribidem
 
 Standalone astronomical crossmatching, extracted from Tom Hehir’s existing
 Astral and AstroBench implementations. Produces match indexes of row positions,
 optionally mapped to caller IDs, rather than downloading or joining scientific
 payloads. Private development repository.
 
+The name joins Latin *astrum* (“star”) and *ibidem* (“in the same place”).
+In footnotes, *ibid.* means “the same source as before”; a crossmatch decides
+whether two catalogue rows are the same astronomical source.
+
 ## Install
 
 With GitHub credentials configured for this private repository:
 
 ```bash
-uv pip install "git+https://github.com/tom-hehir/astro-crossmatch.git"
+uv pip install "git+https://github.com/tom-hehir/astribidem.git"
 ```
 
 Pin an immutable commit in applications. Runtime dependencies are NumPy, SciPy
@@ -19,7 +23,7 @@ and PyArrow. There is no Torch, Lightning, AION, Astral, HATS or LSDB dependency
 ## Match coordinate arrays
 
 ```python
-from astro_crossmatch import (
+from astribidem import (
     crossmatch, rows_to_ids, survey_coords_from_arrays, DegenerateCrossmatchConfig,
 )
 
@@ -68,15 +72,15 @@ index = pq.read_table("index.parquet")
 ```
 
 Its schema metadata records the matching configuration
-(`astro_crossmatch.resolved_config`), per-survey dedupe outcomes
-(`astro_crossmatch.dedupe`), mode settings and the result summary
-(`astro_crossmatch.summary`, read with `index_summary(rows)`), so the saved
+(`astribidem.resolved_config`), per-survey dedupe outcomes
+(`astribidem.dedupe`), mode settings and the result summary
+(`astribidem.summary`, read with `index_summary(rows)`), so the saved
 file is self-describing. Tables from `rows_to_ids` keep that metadata.
 
 ## Match exact UIDs
 
 ```python
-from astro_crossmatch import match_uids, rows_to_ids
+from astribidem import match_uids, rows_to_ids
 
 uids = {"images": ["object-B", "object-A"], "spectra": ["object-A", "object-C"]}
 matches = match_uids(uids, join="outer")
@@ -133,7 +137,7 @@ row columns like every other matcher. The richer spatial `crossmatch` modes and 
   policies in this interface accept two surveys.
 - EntitywiseCrossmatchConfig supports refuse, sequential and split resolvers,
   nullable absent memberships, disputed singleton/drop handling and selection.
-- The separate `astro_crossmatch.geometry` array adapter preserves AstroBench’s
+- The separate `astribidem.geometry` array adapter preserves AstroBench’s
   N-way anchor-pairs and all-pairs topology API, returning positional arrays.
 - Per-survey dedupe keeps the lowest row of each duplicate group, so the kept
   row follows input order. Sort the inputs first when their order is arbitrary.
@@ -148,7 +152,7 @@ component statistics. See [candidate edges](docs/candidate-edges.md).
 For catalogs larger than memory, `write_band_layout` and `build_edges_by_band`
 build the same edges one declination band at a time, and `resolve_to_file`
 resolves them segment by segment into one index file, sorted with the optional
-DuckDB dependency (`astro-crossmatch[large]`); see
+DuckDB dependency (`astribidem[large]`); see
 [candidate edges](docs/candidate-edges.md#build-edges-band-by-band) and the
 [banded edge build design](docs/design/banded-edge-builds.md).
 

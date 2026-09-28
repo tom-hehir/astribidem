@@ -1,6 +1,6 @@
 """Two-source Arrow UID prototypes; no production matcher is replaced.
 
-Run with --module pointing to astro_crossmatch/uids.py. Each measurement runs
+Run with --module pointing to astribidem/uids.py. Each measurement runs
 in a fresh, sequential process; all strategies use the same native validation
 and final Arrow output. No pandas or Polars imports are required.
 """
@@ -49,7 +49,7 @@ def metadata(keys, ids, join, anchor):
         "duplicate_keys": "reject", "null_keys": "reject",
         "ordering": "anchor_then_source_input_order",
     }
-    return {b"astro_crossmatch.resolved_config": json.dumps(
+    return {b"astribidem.resolved_config": json.dumps(
         config, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()}
 

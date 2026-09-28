@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from astro_crossmatch import (
+from astribidem import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
@@ -28,8 +28,8 @@ from astro_crossmatch import (
     survey_coords_from_arrays,
     write_edges,
 )
-from astro_crossmatch.banded import as_chunks, build_edges_by_band, write_band_layout
-from astro_crossmatch.modes import entity_order
+from astribidem.banded import as_chunks, build_edges_by_band, write_band_layout
+from astribidem.modes import entity_order
 
 FIXTURES = Path(__file__).with_name("fixtures")
 sys.path.insert(0, str(FIXTURES))

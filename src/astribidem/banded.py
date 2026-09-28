@@ -35,12 +35,12 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from astro_crossmatch.candidate_edges import DedupeOutcome
-from astro_crossmatch.edge_files import write_metadata, write_segment
-from astro_crossmatch.edges import EdgeSettings, edge_settings
-from astro_crossmatch.graph import connected_components
-from astro_crossmatch.kernel import float64_coordinates
-from astro_crossmatch.regions import (
+from astribidem.candidate_edges import DedupeOutcome
+from astribidem.edge_files import write_metadata, write_segment
+from astribidem.edges import EdgeSettings, edge_settings
+from astribidem.graph import connected_components
+from astribidem.kernel import float64_coordinates
+from astribidem.regions import (
     MARGIN_ABOVE,
     MARGIN_BELOW,
     OWNED,

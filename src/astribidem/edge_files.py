@@ -24,19 +24,19 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from astro_crossmatch.candidate_edges import (
+from astribidem.candidate_edges import (
     CandidateEdges,
     DedupeOutcome,
     PairEdges,
     combine_segments,
 )
-from astro_crossmatch.edges import (
+from astribidem.edges import (
     SurveyCoords,
     _kernels_and_dedupe,
     _plan_edge_build,
     pair_edge_chunks,
 )
-from astro_crossmatch.kernel import resolve_workers
+from astribidem.kernel import resolve_workers
 
 SINGLE_SEGMENT = "segment-0"
 _DROPPED = "dropped"

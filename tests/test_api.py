@@ -8,7 +8,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from astro_crossmatch import (
+from astribidem import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
@@ -54,7 +54,7 @@ def test_public_dedupe_keeps_lowest_row_and_reports_outcome():
     result = resolve(sources, dedupe_radius_arcsec={"a": 0.2, "b": 0})
     assert result["a/row_index"].to_pylist() == [0]
     assert result["b/row_index"].to_pylist() == [0]
-    outcomes = json.loads(result.schema.metadata[b"astro_crossmatch.dedupe"])
+    outcomes = json.loads(result.schema.metadata[b"astribidem.dedupe"])
     assert outcomes["a"]["n_dropped"] == 1
 
 
@@ -173,7 +173,7 @@ def test_float64_integer_and_list_coordinates_do_not_warn(ra, recwarn):
 
 
 def test_geometry_adapter_warns_on_low_precision_coordinates():
-    from astro_crossmatch.geometry import crossmatch_radec, dedupe_and_crossmatch_radec
+    from astribidem.geometry import crossmatch_radec, dedupe_and_crossmatch_radec
 
     low = (np.array([180.0], np.float32), np.array([0.0], np.float32))
     high = (np.array([180.0]), np.array([0.0]))

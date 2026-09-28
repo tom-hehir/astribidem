@@ -12,9 +12,9 @@ the configured disposition.
 
 Index columns carry **row positions** (``<survey>/row_index``): row ``i`` of a
 survey is the ``i``-th coordinate the caller passed in, and a null marks an
-absent survey. ``astro_crossmatch.rows_to_ids`` maps rows to caller IDs.
+absent survey. ``astribidem.rows_to_ids`` maps rows to caller IDs.
 
-Pass a mode instance to ``astro_crossmatch.crossmatch``. Mode configuration
+Pass a mode instance to ``astribidem.crossmatch``. Mode configuration
 is recorded in the resulting Arrow schema metadata.
 """
 
@@ -30,8 +30,8 @@ from typing import Any
 import numpy as np
 import pyarrow as pa
 
-from astro_crossmatch.candidate_edges import CandidateEdges
-from astro_crossmatch.graph import build_global_graph
+from astribidem.candidate_edges import CandidateEdges
+from astribidem.graph import build_global_graph
 
 SUBSET_JOIN_POLICIES = (
     "mutual_nearest",
@@ -68,7 +68,7 @@ class CrossmatchModeConfig(ABC):
 
     @abstractmethod
     def build(self, edges: CandidateEdges) -> pa.Table:
-        """The index, with its summary in ``astro_crossmatch.summary`` metadata."""
+        """The index, with its summary in ``astribidem.summary`` metadata."""
 
 
 def _with_summary(table: pa.Table, summary: dict[str, Any]) -> pa.Table:
@@ -79,7 +79,7 @@ def _with_summary(table: pa.Table, summary: dict[str, Any]) -> pa.Table:
     return table.replace_schema_metadata(metadata)
 
 
-_SUMMARY_KEY = b"astro_crossmatch.summary"
+_SUMMARY_KEY = b"astribidem.summary"
 
 
 def index_summary(index: pa.Table) -> dict[str, Any]:
@@ -283,10 +283,10 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
 
         n_groups = len(rows[anchor])
         metadata = {
-            b"astro_crossmatch.match_index.mode": b"degenerate",
-            b"astro_crossmatch.match_index.surveys": _json_bytes(list(self.surveys)),
-            b"astro_crossmatch.match_index.match_policy": self.policy.encode(),
-            b"astro_crossmatch.match_index.pair_radius_arcsec": _json_bytes(
+            b"astribidem.match_index.mode": b"degenerate",
+            b"astribidem.match_index.surveys": _json_bytes(list(self.surveys)),
+            b"astribidem.match_index.match_policy": self.policy.encode(),
+            b"astribidem.match_index.pair_radius_arcsec": _json_bytes(
                 edges.radius_metadata(combinations(self.surveys, 2))
             ),
         }
@@ -701,24 +701,24 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
             for a, b in combinations(names, 2)
         ]
         metadata = {
-            b"astro_crossmatch.entity_index.surveys": _json_bytes(list(names)),
-            b"astro_crossmatch.entity_index.resolver": self.resolver.encode(),
-            b"astro_crossmatch.entity_index.disputed": self.disputed.encode(),
-            b"astro_crossmatch.entity_index.size_cap": str(self.size_cap).encode(),
-            b"astro_crossmatch.entity_index.pair_radius_arcsec": _json_bytes(
+            b"astribidem.entity_index.surveys": _json_bytes(list(names)),
+            b"astribidem.entity_index.resolver": self.resolver.encode(),
+            b"astribidem.entity_index.disputed": self.disputed.encode(),
+            b"astribidem.entity_index.size_cap": str(self.size_cap).encode(),
+            b"astribidem.entity_index.pair_radius_arcsec": _json_bytes(
                 radius_entries
             ),
         }
         if self.priority is not None:
-            metadata[b"astro_crossmatch.entity_index.priority"] = _json_bytes(
+            metadata[b"astribidem.entity_index.priority"] = _json_bytes(
                 list(self.priority)
             )
         if self.selection is not None:
-            metadata[b"astro_crossmatch.entity_index.selection.min_surveys"] = str(
+            metadata[b"astribidem.entity_index.selection.min_surveys"] = str(
                 self.selection.min_surveys
             ).encode()
             metadata[
-                b"astro_crossmatch.entity_index.selection.must_include_surveys"
+                b"astribidem.entity_index.selection.must_include_surveys"
             ] = _json_bytes(list(self.selection.must_include_surveys))
         table = pa.table(arrays).replace_schema_metadata(metadata)
         summary = {
