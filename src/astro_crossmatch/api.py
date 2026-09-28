@@ -11,7 +11,7 @@ import pyarrow.compute as pc
 
 from astro_crossmatch.candidate_edges import CandidateEdges
 from astro_crossmatch.edges import SurveyCoords, build_edges
-from astro_crossmatch.modes import CrossmatchModeConfig, ModeResult, mode_to_mapping
+from astro_crossmatch.modes import CrossmatchModeConfig, mode_to_mapping
 from astro_crossmatch.uids import _as_arrow
 
 
@@ -37,7 +37,7 @@ def _check_mode_fits_edges(mode: CrossmatchModeConfig, edges: CandidateEdges) ->
         )
 
 
-def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> ModeResult:
+def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
     """Resolve candidate edges into one row-position index.
 
     ``mode`` selects an Astral-derived subset join or exactly-once entity
@@ -49,12 +49,12 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> ModeResult:
     The result contains int64 ``<survey>/row_index`` columns (row ``i`` is the
     survey's ``i``-th coordinate; null when absent), optional separations or
     dispute reasons, and metadata recording the configuration, dedupe
-    outcomes and the result summary, so a table saved with
-    ``pyarrow.parquet.write_table`` is complete. Use ``rows_to_ids`` to
+    outcomes and the result summary (read with ``index_summary``), so a table
+    saved with ``pyarrow.parquet.write_table`` is complete. Use ``rows_to_ids`` to
     replace rows with caller IDs.
     """
     _check_mode_fits_edges(mode, edges)
-    result = mode.build(edges)
+    table = mode.build(edges)
     used_pairs = _required_pairs(mode, edges.survey_names)
     provenance = {
         "surveys": [
@@ -80,17 +80,14 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> ModeResult:
         }
         for survey in edges.surveys
     }
-    metadata = dict(result.table.schema.metadata or {})
+    metadata = dict(table.schema.metadata or {})
     metadata[b"astro_crossmatch.resolved_config"] = json.dumps(
         provenance, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
     metadata[b"astro_crossmatch.dedupe"] = json.dumps(
         outcomes, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
-    metadata[b"astro_crossmatch.summary"] = json.dumps(
-        result.summary, sort_keys=True, separators=(",", ":"), allow_nan=False
-    ).encode()
-    return ModeResult(result.table.replace_schema_metadata(metadata), result.summary)
+    return table.replace_schema_metadata(metadata)
 
 
 def crossmatch(
@@ -102,7 +99,7 @@ def crossmatch(
     workers: int = 1,
     pair_radius_overrides: Mapping[tuple[str, str] | frozenset[str], float]
     | None = None,
-) -> ModeResult:
+) -> pa.Table:
     """Build candidate edges and resolve them in memory: one row-position index.
 
     Equivalent to ``resolve(build_edges(...), mode)``, except that a

@@ -56,14 +56,6 @@ def _json_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
-@dataclass(frozen=True)
-class ModeResult:
-    """One built index plus its summary."""
-
-    table: pa.Table
-    summary: dict[str, Any]
-
-
 class CrossmatchModeConfig(ABC):
     """A mode selection; instantiated from the ``mode:`` class_path block."""
 
@@ -75,7 +67,24 @@ class CrossmatchModeConfig(ABC):
         """Entity semantics depend on every configured survey; joins do not."""
 
     @abstractmethod
-    def build(self, edges: CandidateEdges) -> ModeResult: ...
+    def build(self, edges: CandidateEdges) -> pa.Table:
+        """The index, with its summary in ``astro_crossmatch.summary`` metadata."""
+
+
+def _with_summary(table: pa.Table, summary: dict[str, Any]) -> pa.Table:
+    metadata = dict(table.schema.metadata or {})
+    metadata[_SUMMARY_KEY] = json.dumps(
+        summary, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode()
+    return table.replace_schema_metadata(metadata)
+
+
+_SUMMARY_KEY = b"astro_crossmatch.summary"
+
+
+def index_summary(index: pa.Table) -> dict[str, Any]:
+    """The summary saved in a resolved index's metadata, such as its entity count."""
+    return json.loads((index.schema.metadata or {})[_SUMMARY_KEY])
 
 
 def mode_to_mapping(mode: CrossmatchModeConfig) -> dict[str, Any]:
@@ -229,7 +238,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
     def requires_all_surveys(self) -> bool:
         return False
 
-    def build(self, edges: CandidateEdges) -> ModeResult:
+    def build(self, edges: CandidateEdges) -> pa.Table:
         matched: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
         for a, b in combinations(self.surveys, 2):
             row_a, row_b, sep = edges.oriented_edges(a, b)
@@ -288,7 +297,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
             "policy": self.policy,
             "n_groups": n_groups,
         }
-        return ModeResult(table=table, summary=summary)
+        return _with_summary(table, summary)
 
 
 # --- ambiguous-component resolvers (R3a / R3b) -------------------------------
@@ -505,7 +514,7 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
         index = {name: i for i, name in enumerate(names)}
         return {index[name]: rank for rank, name in enumerate(priority)}
 
-    def build(self, edges: CandidateEdges) -> ModeResult:
+    def build(self, edges: CandidateEdges) -> pa.Table:
         names = edges.survey_names
         n_surveys = len(names)
         selection = self.selection or EntitySelectionConfig()
@@ -737,4 +746,4 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
                     "n_selected_clean_components": n_selected_clean,
                 }
             )
-        return ModeResult(table=table, summary=summary)
+        return _with_summary(table, summary)

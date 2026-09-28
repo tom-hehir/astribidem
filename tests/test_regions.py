@@ -138,8 +138,8 @@ def test_resolving_band_segments_separately_gives_the_same_entities(mode):
     _, segments, boundary = banded_edges(
         PARITY_CATALOGS, 3.0 * ARCSEC, **PARITY_SETTINGS
     )
-    whole = resolve(in_memory(PARITY_CATALOGS, **PARITY_SETTINGS), mode).table
-    parts = [resolve(segment, mode).table for segment in [*segments, boundary]]
+    whole = resolve(in_memory(PARITY_CATALOGS, **PARITY_SETTINGS), mode)
+    parts = [resolve(segment, mode) for segment in [*segments, boundary]]
     assert sorted(r for part in parts for r in canonical(part)) == canonical(whole)
 
 
