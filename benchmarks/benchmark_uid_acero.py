@@ -63,9 +63,11 @@ def finish(keys, ids, rows, join, anchor):
 
 def match_pair(baseline, keys, *, strategy, threads=1, join="inner", ids=None,
                anchor=None):
-    """Small two-source prototype, preserving the existing output contract."""
-    if strategy == "current":
-        return baseline.match_uids(keys, ids=ids, anchor=anchor, join=join)
+    """Small two-source prototype of the typed-ID output contract.
+
+    ``current`` gathers IDs from the committed matcher's row output, so every
+    strategy is compared on the same typed-ID table.
+    """
     if len(keys) != 2 or join not in ("inner", "left", "outer"):
         raise ValueError("prototype requires two sources and a supported join")
     names = list(keys)
@@ -91,7 +93,10 @@ def match_pair(baseline, keys, *, strategy, threads=1, join="inner", ids=None,
     a, b = values[anchor], values[other]
     a_rows = pa.array(np.arange(len(a), dtype=np.int64))
 
-    if strategy == "lookup":
+    if strategy == "current":
+        result = baseline.match_uids(keys, anchor=anchor, join=join)
+        rows = {name: result[f"{name}/row_index"] for name in keys}
+    elif strategy == "lookup":
         b_rows = pc.index_in(a, value_set=b)
         valid = pc.is_valid(b_rows)
         if join == "inner":
@@ -163,7 +168,8 @@ def check(baseline, threads):
                         }
                         got = match_pair(baseline, keys, strategy=strategy,
                                          threads=threads, join=join, anchor=anchor, ids=ids)
-                        expected = baseline.match_uids(keys, join=join, anchor=anchor, ids=ids)
+                        expected = match_pair(baseline, keys, strategy="current",
+                                              join=join, anchor=anchor, ids=ids)
                         assert got.equals(expected, check_metadata=True), (strategy, join, anchor)
                         count += 1
         for a, b in [(["x", "x"], ["y"]), (["x", "x"], []),

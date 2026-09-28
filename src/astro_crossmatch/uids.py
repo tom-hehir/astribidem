@@ -12,32 +12,32 @@ import pyarrow as pa
 import pyarrow.compute as pc
 
 
-def _identifiers(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
-    """Keep integer identity exact, including unsigned values above int64."""
+def _as_arrow(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
+    """Arrow values with exact integer identity, including uint64 above int64."""
     if isinstance(values, (pa.Array, pa.ChunkedArray)):
-        array = values
-    else:
-        # Arrow infers Python integers as int64. Explicitly select uint64 for
-        # ordinary integer sequences that exceed int64, without a NumPy/float
-        # round trip. Typed NumPy and pandas inputs retain their own dtype.
-        if isinstance(values, (list, tuple)) and all(
-            isinstance(value, Integral) and not isinstance(value, bool)
-            for value in values
-        ):
-            dtype = pa.int64()
-            if values and min(values) < -(2**63):
+        return values
+    # Arrow infers Python integers as int64. Explicitly select uint64 for
+    # ordinary integer sequences that exceed int64, without a NumPy/float
+    # round trip. Typed NumPy and pandas inputs retain their own dtype.
+    if isinstance(values, (list, tuple)) and all(
+        isinstance(value, Integral) and not isinstance(value, bool) for value in values
+    ):
+        dtype = pa.int64()
+        if values and min(values) < -(2**63):
+            raise ValueError(f"source {name!r}: {kind} must fit one Arrow integer type")
+        if values and max(values) > 2**63 - 1:
+            if min(values) < 0 or max(values) > 2**64 - 1:
                 raise ValueError(
                     f"source {name!r}: {kind} must fit one Arrow integer type"
                 )
-            if values and max(values) > 2**63 - 1:
-                if min(values) < 0 or max(values) > 2**64 - 1:
-                    raise ValueError(
-                        f"source {name!r}: {kind} must fit one Arrow integer type"
-                    )
-                dtype = pa.uint64()
-            array = pa.array(values, type=dtype)
-        else:
-            array = pa.array(values, from_pandas=True)
+            dtype = pa.uint64()
+        return pa.array(values, type=dtype)
+    return pa.array(values, from_pandas=True)
+
+
+def _identifiers(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
+    """Unique, non-null integer or string values, converted exactly."""
+    array = _as_arrow(values, name=name, kind=kind)
     if array.null_count:
         raise ValueError(f"source {name!r}: {kind} must be non-null")
     if not (
@@ -98,20 +98,19 @@ def _unmatched_rows(
 def match_uids(
     uids: Mapping[str, Any],
     *,
-    ids: Mapping[str, Any] | None = None,
     join: str = "inner",
     anchor: str | None = None,
 ) -> pa.Table:
-    """Join equal UIDs and return ``entity_id`` and ``<source>/id`` columns.
+    """Join equal UIDs; return ``entity_id`` and ``<source>/row_index`` columns.
 
     Each source must have unique, non-null integer or string UIDs. All sources
     must use the same UID family, but integer widths/signedness and string
     widths may differ. Integer comparison is exact, including uint64. Strings
     are case-sensitive and are not normalized or coerced to integers.
 
-    ``ids`` optionally supplies distinct unique source-observation identifiers;
-    otherwise each source's UIDs are its identifiers. Output identifiers keep
-    their Arrow types, including nullable outer/left memberships.
+    Row ``i`` of a source is its ``i``-th UID; a null row means the source is
+    absent from that entity (outer and left joins). Map rows to observation
+    IDs, or back to the UIDs, with ``rows_to_ids``.
 
     The anchor defaults to the first mapping entry. Inner and left joins follow
     its input order. Outer joins start with the anchor and append unseen UIDs
@@ -131,8 +130,6 @@ def match_uids(
         anchor = names[0]
     if anchor not in uids:
         raise ValueError("anchor must name an input source")
-    if ids is not None and (not isinstance(ids, Mapping) or set(ids) != set(names)):
-        raise ValueError("ids must name every input source exactly once")
 
     keys = {name: _identifiers(uids[name], name=name, kind="UIDs") for name in names}
     # An untyped empty Python sequence has no key family. Infer it from another
@@ -152,14 +149,6 @@ def match_uids(
     }
     if len(families) != 1:
         raise ValueError("UID types must all be integer or all be string; no coercion")
-    identifiers = (
-        keys
-        if ids is None
-        else {name: _identifiers(ids[name], name=name, kind="IDs") for name in names}
-    )
-    for name in names:
-        if len(identifiers[name]) != len(keys[name]):
-            raise ValueError(f"source {name!r}: IDs and UIDs must have the same length")
 
     # Normalize explicitly before calling equality kernels: their implicit
     # signed/unsigned coercion need not preserve full-range integer identity.
@@ -204,23 +193,15 @@ def match_uids(
         row_maps[name] = matched
         del matched
 
-    # Release normalized keys before gathering potentially large string IDs.
     del comparable, ordered
     columns = {"entity_id": pa.array(np.arange(len(row_maps[anchor]), dtype=np.int64))}
     for name in names:
-        columns[f"{name}/id"] = pc.take(identifiers[name], row_maps.pop(name))
+        columns[f"{name}/row_index"] = pc.cast(row_maps.pop(name), pa.int64())
     provenance = {
         "method": "exact_uid",
         "join": join,
         "anchor": anchor,
-        "surveys": [
-            {
-                "name": name,
-                "uid_type": str(keys[name].type),
-                "id_type": str(identifiers[name].type),
-            }
-            for name in names
-        ],
+        "surveys": [{"name": name, "uid_type": str(keys[name].type)} for name in names],
         "duplicate_keys": "reject",
         "null_keys": "reject",
         "ordering": "anchor_then_source_input_order",

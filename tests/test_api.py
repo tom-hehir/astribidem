@@ -80,19 +80,6 @@ def test_rows_to_ids_leaves_unnamed_surveys_as_rows():
     assert table.column_names == ["a/row_index", "b/id", "disputed_reason"]
 
 
-@pytest.mark.parametrize("ids", [[1, 1], [None, 2], [float("nan"), 2]])
-def test_rows_to_ids_rejects_ambiguous_or_missing_ids(ids):
-    result = resolve([survey("a", [0, 10])])
-    with pytest.raises(ValueError, match="IDs must"):
-        rows_to_ids(result.table, {"a": ids})
-
-
-def test_rows_to_ids_rejects_ids_that_do_not_cover_the_input_rows():
-    result = resolve([survey("a", [0, 10])])
-    with pytest.raises(ValueError, match="1 IDs for 2 input rows"):
-        rows_to_ids(result.table, {"a": [7]})
-
-
 def test_pair_override_changes_dispute_classification():
     sources = [survey("a", [0]), survey("b", [0.3]), survey("c", [0.6])]
     clean = resolve(sources)

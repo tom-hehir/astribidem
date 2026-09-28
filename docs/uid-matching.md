@@ -19,9 +19,10 @@ were not uniformly slower or more memory hungry.
   numeric strings and integers, strip leading zeros, or normalize identifiers.
   Callers establish the shared identifier namespace and explicitly convert
   representations when needed.
-- Preserve the existing null/duplicate rejection, separate shared keys and
-  observation IDs, N-source inner/left/outer joins, deterministic anchor/source
-  ordering, typed absent memberships, and provenance.
+- Preserve the existing null/duplicate rejection, N-source inner/left/outer
+  joins, deterministic anchor/source ordering, absent memberships, and
+  provenance. Like coordinate matching, the matcher returns row positions;
+  `rows_to_ids` maps them to observation IDs or back to the UIDs afterwards.
 - Keep indexes in memory for now. Capacity includes inputs, temporary matching
   state and output; a raw key column fitting in RAM is insufficient. Payload
   cache limits do not bound matching memory.

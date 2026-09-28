@@ -12,7 +12,7 @@ import pyarrow.compute as pc
 from astro_crossmatch.candidate_edges import CandidateEdges
 from astro_crossmatch.edges import SurveyCoords, build_edges
 from astro_crossmatch.modes import CrossmatchModeConfig, ModeResult, mode_to_mapping
-from astro_crossmatch.uids import _identifiers
+from astro_crossmatch.uids import _as_arrow
 
 
 def _required_pairs(
@@ -128,42 +128,21 @@ def rows_to_ids(
     *,
     id_columns: Mapping[str, str] | None = None,
 ) -> pa.Table:
-    """Replace ``<survey>/row_index`` columns of a resolved index by IDs.
+    """Replace ``<survey>/row_index`` columns of a match index by IDs.
 
-    ``ids[survey]`` holds one unique, non-null integer or string ID per input
-    row, in the order the survey's coordinates were passed to the edge build.
-    Each named survey's row column becomes ``<survey>/<id column>`` (default
-    ``id``) in the same position; null rows stay null. Surveys not named in
-    ``ids`` keep their row column.
+    Each named survey's row column is used to index ``ids[survey]``, which
+    holds one ID per input row in input order (the coordinates passed to the
+    edge build, or the UIDs passed to ``match_uids``). The result replaces the
+    row column in place as ``<survey>/<id column>`` (default ``id``); null
+    rows stay null. Surveys not named in ``ids`` keep their row column. The
+    IDs are not checked.
     """
-    id_columns = dict(id_columns or {})
-    unknown = set(id_columns) - set(ids)
-    if unknown:
-        raise ValueError(f"id_columns names surveys without ids: {sorted(unknown)}")
-    n_rows = {
-        name: outcome["n_rows"]
-        for name, outcome in json.loads(
-            table.schema.metadata[b"astro_crossmatch.dedupe"]
-        ).items()
-    }
+    id_columns = id_columns or {}
     for survey, values in ids.items():
         row_column = f"{survey}/row_index"
-        if row_column not in table.column_names:
-            raise ValueError(f"table has no {row_column!r} column")
-        identifiers = _identifiers(values, name=survey, kind="IDs")
-        if len(identifiers) != n_rows[survey]:
-            raise ValueError(
-                f"survey {survey!r}: {len(identifiers)} IDs for "
-                f"{n_rows[survey]} input rows"
-            )
-        id_column = id_columns.get(survey, "id")
-        if not isinstance(id_column, str) or not id_column or "/" in id_column:
-            raise ValueError(
-                "ID column names must be non-empty and must not contain '/'"
-            )
         table = table.set_column(
             table.column_names.index(row_column),
-            f"{survey}/{id_column}",
-            pc.take(identifiers, table[row_column]),
+            f"{survey}/{id_columns.get(survey, 'id')}",
+            pc.take(_as_arrow(values, name=survey, kind="IDs"), table[row_column]),
         )
     return table
