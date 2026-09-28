@@ -59,7 +59,7 @@ of the design.
    finished and saved; the second kind is handed over.
 3. A **boundary sweep** processes the handed-over groups one band boundary at a
    time, from south to north, and saves them once they are complete.
-4. `resolve` processes each saved segment independently, and an optional merge
+4. `resolve` processes each saved segment independently, and an optional sort
    puts the index into a defined order.
 
 ### Declination bands
@@ -202,9 +202,12 @@ Entities are ordered by their first present survey, in the configured survey
 order, and then by that survey's row. Degenerate mode already uses this order,
 because every entity contains the first survey. Entitywise mode currently lists
 clean groups, then ambiguous rows, then dedupe-disputed rows, and adopts the
-same rule instead. Each segment's output is already in this order for its own
-entities, so a banded build restores the global order by merging segments, not
-by sorting the whole index. The merge is on by default and can be turned off.
+same rule instead. A banded build restores the global order by sorting the
+per-segment indexes in DuckDB, which spills to disk beyond a memory limit. The
+sort was first a merge of the per-segment indexes, each already in order; a
+generic external sort replaced it after the merge was found to hold nearly the
+whole index when segments' rows are scattered. The sort is on by default and
+can be turned off.
 
 ### Inputs
 
@@ -340,7 +343,7 @@ macauff also splits the sky into small regions that are matched separately
 | By the number of surveys present, then row | recorded | This is a coarser form of ordering by combination. |
 | By position on the sky | recorded | `resolve` has no coordinates; hf-crossmatch's `spatial_order` already orders materialized output for payload locality. |
 | Restore the current in-memory order exactly | rejected | The current entitywise order has three blocks with different rules, which is complicated to reproduce and serves no consumer. |
-| Unordered | available | The merge can be turned off, leaving segment order. |
+| Unordered | available | The sort can be turned off, leaving segment order. |
 
 ### Sequencing with hf-crossmatch
 

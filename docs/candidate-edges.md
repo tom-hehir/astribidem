@@ -159,12 +159,18 @@ resolve_to_file(
 ```
 
 It resolves each segment on its own, optionally in parallel processes, and
-merges the per-segment indexes into the usual entity order: first present
+sorts the per-segment indexes into the usual entity order: first present
 survey, then that survey's row. The file equals
-`resolve(read_edges(...), mode).table`, metadata included. The merge holds
-about `batch_rows` index rows at a time in total, however many segments there
-are, and writes the file in row groups of `batch_rows`. `sort=False` skips the
-merge and lists each segment's entities in segment order.
+`resolve(read_edges(...), mode).table`, metadata included.
+
+The sort runs in DuckDB, installed with the `large` extra
+(`astro-crossmatch[large]`). DuckDB spills to disk beyond `memory_limit`, such
+as `"4GB"`, using `threads` threads; when the limit is too small for the
+threads, the sort stops with a `MemoryError`. DuckDB could write the sorted
+index to Parquet itself, which is faster, but it would choose the column types
+and drop the index metadata, so its rows are streamed back and written with
+exactly the resolved schema instead. `sort=False` skips the sort, and needs no
+DuckDB, listing each segment's entities in segment order.
 
 For separate processes, such as a job array, `prepare_band_build` records the
 settings and returns the bands, `build_band(edges_directory, band)` builds one
