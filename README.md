@@ -31,18 +31,14 @@ Lightning, AION, Astral, HATS or LSDB dependency.
 from astribidem import (
     crossmatch,
     rows_to_ids,
-    survey_coords_from_arrays,
     DegenerateCrossmatchConfig,
 )
 
-sources = [
-    survey_coords_from_arrays("a", ra=[10.0, 20.0], dec=[0.0, 0.0]),
-    survey_coords_from_arrays("b", ra=[10.0001, 30.0], dec=[0.0, 0.0]),
-]
+sources = {"a": ([10.0, 20.0], [0.0, 0.0]), "b": ([10.0001, 30.0], [0.0, 0.0])}
 rows = crossmatch(
     sources,
     radius_arcsec=1.0,
-    dedupe_radius_arcsec={"a": 0.0, "b": 0.0},
+    dedupe_radius_arcsec=0.0,
     mode=DegenerateCrossmatchConfig(surveys=["a", "b"], policy="mutual_nearest"),
 )
 # a/row_index | b/row_index | a__b/separation_arcsec
@@ -62,8 +58,10 @@ IDs with `rows_to_ids`, which indexes each ID array by the rows. Pass one ID
 per input row, in the same order as the coordinates; the IDs are not checked,
 and their Arrow types are preserved.
 
-Dedupe radii are explicit per survey; zero opts out. Input coordinates must
-already have catalog-specific cleaning applied and share the appropriate
+Both radii are explicit scalars. `dedupe_radius_arcsec=0.0` disables dedupe.
+Use `dedupe_radius_arcsec_overrides={"a": 0.5}` for survey exceptions and
+`radius_arcsec_overrides={("a", "b"): 2.0}` for cross-survey pair exceptions.
+Input coordinates must already have catalog-specific cleaning applied and share the appropriate
 celestial frame and epoch. No frame or proper-motion conversion is performed.
 Coordinates must be finite, with declination in [-90, 90]; RA may wrap.
 Pass RA/Dec in degrees as float64: matching always computes in float64, and float32 or float16 inputs

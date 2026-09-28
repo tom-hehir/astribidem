@@ -184,8 +184,9 @@ def prepare_band_build(
     edges_directory: str | Path,
     *,
     radius_arcsec: float,
-    dedupe_radius_arcsec: Mapping[str, float],
-    pair_radius_overrides: Mapping[tuple[str, str] | frozenset[str], float]
+    dedupe_radius_arcsec: float,
+    dedupe_radius_arcsec_overrides: Mapping[str, float] | None = None,
+    radius_arcsec_overrides: Mapping[tuple[str, str] | frozenset[str], float]
     | None = None,
     pairs: Iterable[tuple[str, str]] | None = None,
 ) -> list[int]:
@@ -201,7 +202,8 @@ def prepare_band_build(
         {entry["name"]: entry["n_rows"] for entry in layout["surveys"]},
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
-        pair_radius_overrides=pair_radius_overrides,
+        dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
+        radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
     )
     band_height_arcsec = layout["band_height_deg"] * _ARCSEC_PER_DEGREE
@@ -518,8 +520,9 @@ def build_edges_by_band(
     edges_directory: str | Path,
     *,
     radius_arcsec: float,
-    dedupe_radius_arcsec: Mapping[str, float],
-    pair_radius_overrides: Mapping[tuple[str, str] | frozenset[str], float]
+    dedupe_radius_arcsec: float,
+    dedupe_radius_arcsec_overrides: Mapping[str, float] | None = None,
+    radius_arcsec_overrides: Mapping[tuple[str, str] | frozenset[str], float]
     | None = None,
     pairs: Iterable[tuple[str, str]] | None = None,
     workers: int = 1,
@@ -537,7 +540,8 @@ def build_edges_by_band(
         edges_directory,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
-        pair_radius_overrides=pair_radius_overrides,
+        dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
+        radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
     )
     tasks = [(str(edges_directory), band, workers) for band in bands]

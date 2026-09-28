@@ -160,8 +160,13 @@ def _chunk_bounds(n: int, workers: int, chunk_rows: int | None) -> np.ndarray:
 class CatalogKernel:
     """One survey's match structure: unit vectors plus their KD-tree."""
 
-    def __init__(self, ra: np.ndarray, dec: np.ndarray) -> None:
-        self._init_from_xyz(radec_to_xyz(ra, dec))
+    def __init__(
+        self, ra: np.ndarray, dec: np.ndarray, *, name: str | None = None
+    ) -> None:
+        ra_shape, dec_shape = np.shape(ra), np.shape(dec)
+        if len(ra_shape) != 1 or len(dec_shape) != 1 or ra_shape != dec_shape:
+            raise ValueError("ra/dec must be aligned 1-D arrays")
+        self._init_from_xyz(radec_to_xyz(ra, dec, name=name))
 
     @classmethod
     def from_xyz(cls, xyz: np.ndarray) -> CatalogKernel:

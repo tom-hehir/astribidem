@@ -42,7 +42,7 @@ matches = match_hub_and_spoke(
     catalogs,
     anchor="labels",
     links={"spectra": UIDLink(), "images": SpatialLink(1.0)},
-    dedupe_radius_arcsec={"labels": 0.0, "images": 0.0},
+    dedupe_radius_arcsec=0.0,
 )
 # entity_id | labels/row_index | spectra/row_index | images/row_index
 #         0 |                0 |                 1 |                0
@@ -61,9 +61,10 @@ anchor key columns for different UID links or composite keys.
 
 Spatial participants additionally need finite `ra`/`dec` in degrees in a common
 celestial frame. Cleaning and coordinate-frame conversion remain the caller's
-responsibility. Every spatial participant, including the anchor, requires an
-explicit dedupe radius; `0.0` opts out. UID-only sources need no coordinates or
-dedupe radius. `SpatialLink` supports the existing `mutual_nearest` (default),
+responsibility. The scalar `dedupe_radius_arcsec` applies to every spatial
+participant, including the anchor; `0.0` opts out. Use
+`dedupe_radius_arcsec_overrides` for exceptions among those participants.
+UID-only sources need no coordinates and cannot have a spatial dedupe override. `SpatialLink` supports the existing `mutual_nearest` (default),
 `mutual_unique`, `anchored_nearest` and `anchored_unique` policies. Anchored
 policies may select the same counterpart for multiple anchors.
 
@@ -97,16 +98,19 @@ arrays rather than this typed-ID product.
 
 ## Implementation boundary
 
-The implementation lives in `hub_and_spoke.py` and calls the existing matchers.
+The implementation lives in `hub_and_spoke.py` and uses the shared UID,
+spatial-kernel, deduplication and resolution primitives.
 Arrow IDs/UIDs stay native. Spatial links match row positions, so spatial
 matching never sees the IDs. Spatial dedupe keeps the lowest row of each
 duplicate group and therefore follows the catalog's row order. The final table
 holds the matched rows, like every other matcher.
 
 All matching remains in memory. Spatial links currently execute sequentially;
-`workers` controls the existing spatial matcher within each link. Repeated
-spatial links can repeat anchor kernel/dedupe work; no shared-kernel framework
-or per-link checkpoint system is introduced. Core tests exercise ambiguity,
+`workers` controls the spatial queries within each link. Each call prepares
+the full anchor kernel and dedupe result once, then reuses them for every
+spatial spoke. Each spoke kernel is released after its candidate edges are
+built, before the next spoke is prepared. No kernels are cached across calls.
+Core tests check these lifetimes alongside ambiguity,
 exact identity, dedupe and order; realistic hub-and-spoke build performance is
 not yet benchmarked.
 

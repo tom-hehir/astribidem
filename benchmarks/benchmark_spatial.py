@@ -27,7 +27,6 @@ from astribidem import (
     build_edges_by_band,
     crossmatch,
     resolve_to_file,
-    survey_coords_from_arrays,
     write_band_layout,
 )
 from astribidem.banded import as_chunks
@@ -50,17 +49,20 @@ def worker(args):
             dec + rng.normal(0.0, 0.15 / 3600, args.rows),
         ),
     }
-    settings = {"radius_arcsec": 1.0, "dedupe_radius_arcsec": {"a": 0.0, "b": 0.0}}
+    settings = {
+        "radius_arcsec": 1.0,
+        "dedupe_radius_arcsec": 0.0,
+        "dedupe_radius_arcsec_overrides": {"a": 0.0, "b": 0.0},
+    }
     mode = EntitywiseCrossmatchConfig()
     baseline = peak_mb()
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         start = time.perf_counter()
         if args.route == "in_memory":
-            surveys = [survey_coords_from_arrays(n, *c) for n, c in coordinates.items()]
-            table = crossmatch(surveys, mode=mode, **settings)
+            table = crossmatch(coordinates, mode=mode, **settings)
             pq.write_table(table, root / "index.parquet")
-            del table, surveys
+            del table
         else:
             write_band_layout(
                 root / "layout",

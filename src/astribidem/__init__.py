@@ -24,7 +24,7 @@ from astribidem.edge_files import (
     write_edges,
     write_segment,
 )
-from astribidem.edges import SurveyCoords, build_edges, survey_coords_from_arrays
+from astribidem.edges import build_edges
 from astribidem.hub_and_spoke import SpatialLink, UIDLink, match_hub_and_spoke
 from astribidem.index_files import resolve_to_file
 from astribidem.kernel import CatalogKernel
@@ -48,7 +48,6 @@ __all__ = [
     "EntitywiseCrossmatchConfig",
     "PairEdges",
     "SpatialLink",
-    "SurveyCoords",
     "UIDLink",
     "audit_edges",
     "build_band",
@@ -67,7 +66,6 @@ __all__ = [
     "resolve_to_file",
     "rows_to_ids",
     "segment_names",
-    "survey_coords_from_arrays",
     "sweep_boundaries",
     "write_band_layout",
     "write_edges",

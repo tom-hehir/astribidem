@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from itertools import combinations
 
 import pyarrow as pa
 import pyarrow.compute as pc
+from numpy.typing import ArrayLike
 
 from astribidem.candidate_edges import CandidateEdges
-from astribidem.edges import SurveyCoords, build_edges
+from astribidem.edges import _build_prepared_edges, _prepare_edge_build
+from astribidem.kernel import resolve_workers
 from astribidem.modes import CrossmatchModeConfig, mode_to_mapping
 from astribidem.uids import _as_arrow
 
@@ -91,13 +93,14 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
 
 
 def crossmatch(
-    surveys: Sequence[SurveyCoords],
+    surveys: Mapping[str, tuple[ArrayLike, ArrayLike]],
     *,
     radius_arcsec: float,
-    dedupe_radius_arcsec: Mapping[str, float],
+    dedupe_radius_arcsec: float,
+    dedupe_radius_arcsec_overrides: Mapping[str, float] | None = None,
     mode: CrossmatchModeConfig,
     workers: int = 1,
-    pair_radius_overrides: Mapping[tuple[str, str] | frozenset[str], float]
+    radius_arcsec_overrides: Mapping[tuple[str, str] | frozenset[str], float]
     | None = None,
 ) -> pa.Table:
     """Build candidate edges and resolve them in memory: one row-position index.
@@ -109,18 +112,24 @@ def crossmatch(
     """
     if not isinstance(mode, CrossmatchModeConfig):
         raise TypeError("mode must be a CrossmatchModeConfig")
-    names = [survey.name for survey in surveys]
+    if not isinstance(surveys, Mapping) or not surveys:
+        raise ValueError("surveys must map at least one name to an (ra, dec) tuple")
+    names = tuple(surveys)
     unknown = set(mode.required_surveys()) - set(names)
     if unknown:
         raise ValueError(f"mode names unknown surveys: {sorted(unknown)}")
-    edges = build_edges(
+    workers = resolve_workers(workers)
+    settings, kernels = _prepare_edge_build(
         surveys,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
-        pair_radius_overrides=pair_radius_overrides,
+        dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
+        radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=None if mode.requires_all_surveys() else _required_pairs(mode, names),
-        workers=workers,
     )
+    del surveys
+    edges = _build_prepared_edges(settings, kernels, workers=workers)
+    del kernels
     return resolve(edges, mode)
 
 

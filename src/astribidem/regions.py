@@ -31,7 +31,7 @@ import numpy as np
 from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
 from astribidem.edges import EdgeSettings, dedupe_from_pairs
 from astribidem.graph import connected_components
-from astribidem.kernel import CatalogKernel, radec_to_xyz, resolve_workers
+from astribidem.kernel import CatalogKernel, resolve_workers
 
 MARGIN_BELOW = -1
 OWNED = 0
@@ -106,9 +106,7 @@ def build_region(
     offsets = dict(zip(names, np.cumsum([0, *[sizes[n] for n in names]])[:-1]))
     n_nodes = sum(sizes.values())
     kernels = {
-        name: CatalogKernel.from_xyz(
-            radec_to_xyz(loaded[name].ra, loaded[name].dec, name=name)
-        )
+        name: CatalogKernel(loaded[name].ra, loaded[name].dec, name=name)
         for name in names
     }
     owned = {name: np.asarray(loaded[name].side) == OWNED for name in names}
@@ -146,6 +144,8 @@ def build_region(
         i, j, separation = kernels[a].all_pairs(kernels[b], radius, workers=workers)
         keep = ~inactive[a][i] & ~inactive[b][j]
         cross[(a, b)] = (i[keep], j[keep], separation[keep])
+
+    del kernels
 
     # Connected pieces over cross-survey pairs and undecided dedupe pairs. A
     # piece is finished exactly when the region owns every row in it: a

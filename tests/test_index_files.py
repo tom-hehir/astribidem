@@ -31,8 +31,9 @@ from aion_parity_cases import (  # noqa: E402 — fixture path is set above
 FIXTURE = dict(np.load(FIXTURES / "aion_parity.npz"))
 SETTINGS = {
     "radius_arcsec": RADIUS_ARCSEC,
-    "dedupe_radius_arcsec": DEDUPE_RADIUS_ARCSEC,
-    "pair_radius_overrides": {PAIR_RADIUS_OVERRIDE[0]: PAIR_RADIUS_OVERRIDE[1]},
+    "dedupe_radius_arcsec": 0.0,
+    "dedupe_radius_arcsec_overrides": DEDUPE_RADIUS_ARCSEC,
+    "radius_arcsec_overrides": {PAIR_RADIUS_OVERRIDE[0]: PAIR_RADIUS_OVERRIDE[1]},
 }
 MODES = [
     EntitywiseCrossmatchConfig(),
@@ -97,15 +98,10 @@ def test_unsorted_index_holds_the_same_entities_in_segment_order(banded, tmp_pat
 
 
 def test_single_segment_edges_resolve_to_the_same_index(tmp_path):
-    from astribidem import build_edges, survey_coords_from_arrays
+    from astribidem import build_edges
 
     edges = build_edges(
-        [
-            survey_coords_from_arrays(
-                n, FIXTURE[f"input/{n}/ra"], FIXTURE[f"input/{n}/dec"]
-            )
-            for n in SURVEYS
-        ],
+        {n: (FIXTURE[f"input/{n}/ra"], FIXTURE[f"input/{n}/dec"]) for n in SURVEYS},
         **SETTINGS,
     )
     write_edges(edges, tmp_path / "edges")
@@ -133,7 +129,11 @@ def test_scattered_segments_sort_correctly_within_a_small_memory_limit(tmp_path)
         band_height_deg=0.05,
     )
     build_edges_by_band(
-        layout, edges, radius_arcsec=2.0, dedupe_radius_arcsec={"a": 0.0, "b": 0.0}
+        layout,
+        edges,
+        radius_arcsec=2.0,
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0.0, "b": 0.0},
     )
     assert len(segment_names(edges)) > 100
     mode = EntitywiseCrossmatchConfig()

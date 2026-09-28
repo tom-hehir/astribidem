@@ -20,7 +20,11 @@ the same physical source. Radius and resolution policy are scientific choices.
 The candidate search is not truncated to the nearest neighbour before policies
 that need every candidate are applied.
 
-Every survey needs an explicit dedupe radius. Use zero to disable dedupe. A
+Set a scalar `dedupe_radius_arcsec` for all surveys; zero disables dedupe.
+Supply exceptions with `dedupe_radius_arcsec_overrides={"a": 0.5}`. The
+matching radius follows the same pattern: `radius_arcsec` and
+`radius_arcsec_overrides={("a", "b"): 2.0}`. Both defaults are required;
+overrides are optional dictionaries and unknown survey names fail. A
 duplicate group whose members all lie within the dedupe radius keeps its lowest
 input row. A connected chain that is not such a group is disputed and excluded
 from pair matching. Sort inputs first if you want a preferred observation to
@@ -44,12 +48,12 @@ mutual-nearest keeps only A's first row with B; mutual-unique keeps neither
 because B has two candidates.
 
 ```python
-from astribidem import crossmatch, survey_coords_from_arrays, DegenerateCrossmatchConfig
+from astribidem import crossmatch, DegenerateCrossmatchConfig
 
-surveys = [
-    survey_coords_from_arrays("a", [10.0, 10.0 + 0.8 / 3600], [0.0, 0.0]),
-    survey_coords_from_arrays("b", [10.0 + 0.2 / 3600], [0.0]),
-]
+surveys = {
+    "a": ([10.0, 10.0 + 0.8 / 3600], [0.0, 0.0]),
+    "b": ([10.0 + 0.2 / 3600], [0.0]),
+}
 for policy in (
     "anchored_nearest",
     "anchored_unique",
@@ -59,7 +63,7 @@ for policy in (
     index = crossmatch(
         surveys,
         radius_arcsec=1.0,
-        dedupe_radius_arcsec={"a": 0.0, "b": 0.0},
+        dedupe_radius_arcsec=0.0,
         mode=DegenerateCrossmatchConfig(surveys=["a", "b"], policy=policy),
     )
     print(policy, index.num_rows)  # 2, 2, 1, 0

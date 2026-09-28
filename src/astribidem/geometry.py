@@ -25,7 +25,7 @@ from typing import Literal
 import numpy as np
 
 from astribidem.candidate_edges import DedupeOutcome
-from astribidem.edges import dedupe_survey, survey_coords_from_arrays
+from astribidem.edges import dedupe_survey
 from astribidem.kernel import (
     CatalogKernel,
     arcsec_to_chord,
@@ -274,8 +274,7 @@ def dedupe_radec(
         The :class:`DedupeOutcome` (dropped / kept / disputed rows)
         and the boolean active-row mask (``True`` = row survives).
     """
-    coords = survey_coords_from_arrays(name, ra, dec)
-    return dedupe_survey(coords, radius_arcsec)
+    return dedupe_survey(name, radius_arcsec, CatalogKernel(ra, dec, name=name))
 
 
 def dedupe_and_crossmatch_radec(

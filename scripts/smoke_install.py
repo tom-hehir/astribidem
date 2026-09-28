@@ -15,7 +15,6 @@ from astribidem import (
     match_uids,
     resolve_to_file,
     rows_to_ids,
-    survey_coords_from_arrays,
     write_edges,
 )
 
@@ -26,11 +25,12 @@ def main():
     assert "site-packages" in astribidem.__file__, astribidem.__file__
     assert importlib.util.find_spec("astropy") is None
     assert (importlib.util.find_spec("duckdb") is not None) == (extra == "large")
-    surveys = [
-        survey_coords_from_arrays("a", [10.0, 20.0], [0.0, 0.0]),
-        survey_coords_from_arrays("b", [10.0001, 30.0], [0.0, 0.0]),
-    ]
-    settings = {"radius_arcsec": 1.0, "dedupe_radius_arcsec": {"a": 0.0, "b": 0.0}}
+    surveys = {"a": ([10.0, 20.0], [0.0, 0.0]), "b": ([10.0001, 30.0], [0.0, 0.0])}
+    settings = {
+        "radius_arcsec": 1.0,
+        "dedupe_radius_arcsec": 0.0,
+        "dedupe_radius_arcsec_overrides": {"a": 0.0, "b": 0.0},
+    }
     mode = DegenerateCrossmatchConfig(surveys=["a", "b"])
     rows = crossmatch(surveys, mode=mode, **settings)
     assert rows_to_ids(rows, {"a": [101, 102]})["a/id"].to_pylist() == [101]

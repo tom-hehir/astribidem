@@ -12,7 +12,7 @@ Names explicitly exported from `astribidem` are the supported alpha interface.
 
 | Task | Entry points |
 | --- | --- |
-| Match positions | `survey_coords_from_arrays`, `SurveyCoords`, `crossmatch` |
+| Match positions | `crossmatch` with a mapping of names to `(ra, dec)` tuples |
 | Choose association policy | `DegenerateCrossmatchConfig`, `EntitywiseCrossmatchConfig`, `EntitySelectionConfig`, `CrossmatchModeConfig` |
 | Match shared identifiers | `match_uids`, `match_hub_and_spoke`, `UIDLink`, `SpatialLink` |
 | Use results | `rows_to_ids`, `index_summary` |
@@ -28,6 +28,39 @@ alpha. Use the high-level functions unless you need their explicit controls.
 The documented `astribidem.geometry` array adapter and
 `astribidem.banded.as_chunks` helper are also available. Other module helpers,
 underscore-prefixed names and intermediate files are implementation details.
+
+## Coordinate and radius inputs
+
+`crossmatch`, `build_edges` and `build_edges_to_directory` accept a mapping
+of survey names to `(ra, dec)` tuples, always in degrees. Each pair contains
+aligned one-dimensional array-like values; an ordinary tuple or compatible
+`NamedTuple` works. Mapping order defines survey order, and array order defines
+row positions. The private-development `SurveyCoords` wrapper and
+`survey_coords_from_arrays` factory have been removed.
+
+Both radius arguments are required finite scalars: `radius_arcsec > 0` and
+`dedupe_radius_arcsec >= 0`. Zero disables spatial deduplication. Optional
+`radius_arcsec_overrides` maps survey pairs to positive radii;
+`dedupe_radius_arcsec_overrides` maps survey names to nonnegative radii.
+Defaults never accept dictionaries. Unknown names and duplicate unordered pair
+overrides fail. Saved provenance records the expanded radii, so equivalent
+settings have the same scientific metadata. `radius_arcsec_overrides` replaces
+the private-development name `pair_radius_overrides`.
+
+Banded builds use the same radius arguments. `match_hub_and_spoke` uses the
+same dedupe default/overrides for spatial participants, while each `SpatialLink`
+sets its matching radius. Its Arrow-table input and UID matching rules are
+unchanged. `match_uids` accepts a mapping of names to identifier arrays.
+
+Every matching call is self-contained. RA/Dec becomes XYZ at kernel
+construction, once per survey in an in-memory build or once per loaded region
+in a banded build. Ordinary builds share each kernel across deduplication and
+all its pairs. Mixed builds reuse the hub and prepare one spatial spoke at a
+time. Input arrays are not mutated, and no kernels are retained across calls.
+The in-memory entry points drop their input references after preparation;
+arrays still referenced by the caller remain allocated. Kernels retain XYZ
+and the tree, whose coordinate buffer shares the XYZ allocation. Resolution
+uses row indices and separations and retains no coordinates or trees.
 
 ## Rows and ordering
 

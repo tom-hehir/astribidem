@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
+from numpy.typing import ArrayLike
 
 from astribidem._formats import check_file_metadata, file_metadata
 from astribidem.candidate_edges import (
@@ -32,9 +33,8 @@ from astribidem.candidate_edges import (
     combine_segments,
 )
 from astribidem.edges import (
-    SurveyCoords,
-    _kernels_and_dedupe,
-    _plan_edge_build,
+    _dedupe_kernels,
+    _prepare_edge_build,
     pair_edge_chunks,
 )
 from astribidem.kernel import resolve_workers
@@ -251,12 +251,13 @@ def read_edges(directory: str | Path) -> CandidateEdges:
 
 
 def build_edges_to_directory(
-    surveys: Sequence[SurveyCoords],
+    surveys: Mapping[str, tuple[ArrayLike, ArrayLike]],
     directory: str | Path,
     *,
     radius_arcsec: float,
-    dedupe_radius_arcsec: Mapping[str, float],
-    pair_radius_overrides: Mapping[tuple[str, str] | frozenset[str], float]
+    dedupe_radius_arcsec: float,
+    dedupe_radius_arcsec_overrides: Mapping[str, float] | None = None,
+    radius_arcsec_overrides: Mapping[tuple[str, str] | frozenset[str], float]
     | None = None,
     pairs: Iterable[tuple[str, str]] | None = None,
     workers: int = 1,
@@ -271,15 +272,21 @@ def build_edges_to_directory(
     edge memory is the limit. Coordinates, KD-trees and dedupe results stay in
     memory throughout.
     """
-    plan = _plan_edge_build(
-        surveys, radius_arcsec, dedupe_radius_arcsec, pair_radius_overrides, pairs
-    )
     workers = resolve_workers(workers)
+    plan, kernels = _prepare_edge_build(
+        surveys,
+        radius_arcsec=radius_arcsec,
+        dedupe_radius_arcsec=dedupe_radius_arcsec,
+        dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
+        radius_arcsec_overrides=radius_arcsec_overrides,
+        pairs=pairs,
+    )
+    del surveys
     directory = Path(directory)
     _check_pair_file_names(plan.pair_radius_arcsec)
     segment = directory / SINGLE_SEGMENT
     _make_segment_directories(segment, with_rows=False)
-    kernels, outcomes, active = _kernels_and_dedupe(plan)
+    outcomes, active = _dedupe_kernels(plan, kernels)
     for outcome in outcomes:
         _write_dedupe(segment, outcome)
     for (a, b), radius in plan.pair_radius_arcsec.items():

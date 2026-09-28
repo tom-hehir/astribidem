@@ -19,7 +19,6 @@ from astribidem import (
     prepare_band_build,
     read_edges,
     rows_to_ids,
-    survey_coords_from_arrays,
     write_band_layout,
     write_edges,
 )
@@ -27,9 +26,10 @@ from astribidem import (
 
 def spatial_index():
     return crossmatch(
-        [survey_coords_from_arrays("a", [10.0], [0.0])],
+        {"a": ([10.0], [0.0])},
         radius_arcsec=1.0,
-        dedupe_radius_arcsec={"a": 0.0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0.0},
         mode=EntitywiseCrossmatchConfig(),
     )
 
@@ -45,7 +45,8 @@ def test_index_version_survives_id_mapping_and_parquet(kind, tmp_path):
             {"a": pa.table({"uid": [1]}), "b": pa.table({"uid": [1]})},
             anchor="a",
             links={"b": UIDLink()},
-            dedupe_radius_arcsec={},
+            dedupe_radius_arcsec=0.0,
+            dedupe_radius_arcsec_overrides={},
         )
     index = rows_to_ids(index, {"a": ["object-a"]})
     pq.write_table(index, tmp_path / "index.parquet")
@@ -70,9 +71,10 @@ def test_summary_rejects_unversioned_or_unsupported_indexes(version):
 @pytest.mark.parametrize("version", [None, 0, 2, "1", True])
 def test_saved_edges_reject_unversioned_or_unsupported_files(tmp_path, version):
     edges = build_edges(
-        [survey_coords_from_arrays("a", [10.0], [0.0])],
+        {"a": ([10.0], [0.0])},
         radius_arcsec=1.0,
-        dedupe_radius_arcsec={"a": 0.0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0.0},
     )
     write_edges(edges, tmp_path)
     path = tmp_path / "metadata.json"
@@ -89,7 +91,11 @@ def test_saved_edges_reject_unversioned_or_unsupported_files(tmp_path, version):
 def test_layout_and_worker_plan_reject_unsupported_versions(tmp_path):
     layout, edges = tmp_path / "layout", tmp_path / "edges"
     write_band_layout(layout, {"a": [([10.0], [0.0])]}, band_height_deg=1.0)
-    settings = {"radius_arcsec": 1.0, "dedupe_radius_arcsec": {"a": 0.0}}
+    settings = {
+        "radius_arcsec": 1.0,
+        "dedupe_radius_arcsec": 0.0,
+        "dedupe_radius_arcsec_overrides": {"a": 0.0},
+    }
     bands = prepare_band_build(layout, edges, **settings)
     plan_path = edges / "band-build.json"
     plan = json.loads(plan_path.read_text())
