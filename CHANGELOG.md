@@ -18,10 +18,9 @@ used only during private development and was never published.
   development files must be regenerated.
 - Reject nonfinite coordinates and declinations outside [-90, 90].
 - Require DuckDB 1.5 for sorted segment resolution; SciPy starts at 1.11.1.
-- CI checks built distributions, supported Python versions, minimum
-  dependencies, operating systems and optional installation boundaries.
-- Publish tested distributions through Trusted Publishing on GitHub release;
-  manual release runs from version tags target TestPyPI.
+- CI checks formatting, built distributions and optional installation boundaries
+  on Ubuntu with Python 3.14.
+- Publish tested distributions to PyPI through Trusted Publishing on GitHub release.
 
 This is an alpha interface. Pin the version and consult
 [API and compatibility](docs/api-and-compatibility.md) before upgrading.
