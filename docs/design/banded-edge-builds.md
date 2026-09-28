@@ -103,30 +103,37 @@ rows within `r_max` of either boundary. It then runs the existing kernel and
 graph code on those rows:
 
 1. It finds the dedupe pairs within each survey and forms dedupe groups. A
-   dedupe group whose members are all owned by the band is final, and its
-   verdict is decided here. A dedupe group that includes a margin row is
-   deferred, and its rows are marked as deferred.
-2. It finds the pairs between surveys and forms entity groups. An edge joins
-   the local graph when both of its rows are final and active, or when either
-   row is deferred, because a deferred row's dedupe verdict is not yet known.
-3. It classifies each entity group. A group whose members are all owned and
-   none deferred is final. Every other group is deferred.
-4. It saves the final groups as a segment named after the band, and hands over
-   the deferred groups: their owned rows, their dedupe pairs whose lower row is
-   owned, and their cross-survey pairs whose first row is owned.
+   dedupe group that the band owns entirely is decided here. A dedupe group
+   that includes a margin row stays undecided, and its rows are pending.
+2. It finds the pairs between surveys, leaving out pairs that touch a row
+   already decided to be dropped or disputed.
+3. It forms connected pieces from the cross-survey pairs and the undecided
+   dedupe pairs together. Undecided dedupe pairs belong in the same graph
+   because a dedupe group must be decided as a whole before its rows can be
+   matched.
+4. A piece is finished when the band owns every row in it. A pending row
+   never lies in a finished piece, because its undecided dedupe pairs join it
+   to the margin row that left its group undecided.
+5. It saves the finished pieces, with the decided dedupe groups, as a segment
+   named after the band. It hands over the other pieces: its own rows in them,
+   marking which are pending; the undecided dedupe pairs whose lower row it
+   owns; the cross-survey pairs whose first row it owns; and, for each piece,
+   whether it reaches the boundary below and the boundary above.
 
 The ownership rules mean every row and every pair is saved or handed over by
-exactly one band.
+exactly one band. A dropped row's kept row can lie in a different segment,
+because the kept row can join a piece that is handed over while the dropped
+row's verdict is already final.
 
-A final group is complete and correct. Every true neighbour of one of its rows
-lies within `r_max`, so it is either owned by the band or in the margin. A
-margin row or deferred row in the group would have made the group deferred, so
-every neighbour is owned and final, and every edge was judged with known
-verdicts. A group that truly crosses a boundary has a row within `r_max` of
-that boundary on each side, so every band that owns part of it sees a margin
-row in it and defers it. Edges through rows later found inactive can only join
-deferred groups together; they never make a deferred group look final, and the
-sweep recomputes the groups after applying the verdicts.
+A finished piece is complete and correct. Every true neighbour of one of its
+rows lies within `r_max`, so it is either owned by the band or in the margin;
+a margin neighbour would have put a margin row in the piece. Every edge
+between its rows was therefore judged with dedupe verdicts that are final. A
+group that truly crosses a boundary has a row within `r_max` of that boundary
+on each side, so every band that owns part of it sees a margin row in its
+piece and hands the piece over. When handed-over pieces are finished, pending
+dedupe groups are decided from their pairs first, and cross-survey pairs are
+then kept only between rows that are handed over and active.
 
 ### The boundary sweep
 
