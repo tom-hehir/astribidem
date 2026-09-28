@@ -7,7 +7,7 @@ topology is the distinguishing feature: there are no spoke-to-spoke checks.
 
 The output is an inner intersection: an anchor observation is retained only when
 every link succeeds. Partial groups and groups without the anchor are not
-emitted. Rows follow the anchor's input order; ID columns follow the input
+emitted. Rows follow the anchor's input order; row columns follow the input
 mapping order.
 
 For a spatial example, put A at 0 arcsec, B at -0.8 arcsec and C at +0.8 arcsec
@@ -44,10 +44,12 @@ matches = match_hub_and_spoke(
     links={"spectra": UIDLink(), "images": SpatialLink(1.0)},
     dedupe_radius_arcsec=0.0,
 )
+# Contents of `matches`: the input row positions that matched every link.
 # entity_id | labels/row_index | spectra/row_index | images/row_index
 #         0 |                0 |                 1 |                0
 
 matches = rows_to_ids(matches, {name: table["id"] for name, table in catalogs.items()})
+# Contents of `matches` after mapping the row positions to catalogue IDs.
 # entity_id | labels/id | spectra/id | images/id
 #         0 |        10 |        100 |       300
 ```
@@ -55,7 +57,7 @@ matches = rows_to_ids(matches, {name: table["id"] for name, table in catalogs.it
 The result refers to rows: row `i` of a source is its table's `i`-th row.
 `rows_to_ids` maps rows to any ID column. UID links use a table's `uid` column,
 falling back to `id` when absent. Keys keep the existing exact integer/
-string semantics and duplicate/null rejection. This first interface provides one
+string semantics and duplicate/null rejection. Each table supplies one
 shared UID field per source, including the anchor; it does not support different
 anchor key columns for different UID links or composite keys.
 
@@ -79,7 +81,7 @@ The anchor defines which coordinates drive each spatial relationship. The result
 guarantees each declared anchor relationship; counterparts do not need to match
 one another. There is no transitive identity inference, many-to-many expansion,
 UID-then-spatial fallback or outer join. Existing `crossmatch` and `match_uids`
-behavior is unchanged, including the existing N-way spatial all-pairs contract.
+provide separate N-way joins and spatial association policies.
 A configuration containing only one link type still follows this explicitly
 anchor-based composition contract.
 
@@ -94,61 +96,12 @@ N-source all-pairs subset joins and entitywise `refuse`, `sequential` and
 `split` resolution. These are not applied across the independent hub-and-spoke
 links. The lower-level `geometry.crossmatch_radec` adapter also supports
 `matching_topology="anchor-pairs"` with complete matches, returning positional
-arrays rather than this typed-ID product.
+arrays instead of an Arrow table.
 
-## Implementation boundary
+## Memory and execution
 
-The implementation lives in `hub_and_spoke.py` and uses the shared UID,
-spatial-kernel, deduplication and resolution primitives.
-Arrow IDs/UIDs stay native. Spatial links match row positions, so spatial
-matching never sees the IDs. Spatial dedupe keeps the lowest row of each
-duplicate group and therefore follows the catalog's row order. The final table
-holds the matched rows, like every other matcher.
-
-All matching remains in memory. Spatial links currently execute sequentially;
-`workers` controls the spatial queries within each link. Each call prepares
-the full anchor kernel and dedupe result once, then reuses them for every
-spatial spoke. Each spoke kernel is released after its candidate edges are
-built, before the next spoke is prepared. No kernels are cached across calls.
-Core tests check these lifetimes alongside ambiguity,
-exact identity, dedupe and order; realistic hub-and-spoke build performance is
-not yet benchmarked.
-
-The independent-link composition follows AstroBench's mixed MMU workflow. Unlike
-its first-link ordering, this API returns rows in anchor input order. HF scanning, persistence and payload materialization remain
-responsibilities of `astribidem-hf`.
-
-## Renaming from the original interface
-
-`match_hub_and_spoke` replaces `match_mixed`, and `hub_and_spoke.py` replaces
-`mixed.py`; there are no compatibility aliases. Update imports and calls.
-Matching behavior is unchanged. The resolved-config provenance method is now
-`hub_and_spoke`, so saved workflow identities using the old method are
-different.
-
-`astribidem-hf` now exposes `match_catalog_hub_and_spoke` and the
-`hub_and_spoke` CLI method, with its dependency pinned to a core commit
-providing the renamed API. Its
-[migration guide](https://github.com/tom-hehir/astribidem-hf/blob/5de543ac020e8a89854c2b97a1e0911772b362d4/docs/cli.md#migrating-the-original-anchor-link-interface)
-covers the import and configuration changes and the new work directory needed
-for workflows saved under `mixed`.
-
-## Initial implementation validation
-
-Before this rename, the original anchor-link implementation passed the complete
-core suite (299 tests), including 39 new composition regressions. Those 39 tests
-and 84 UID tests also passed on minimum-supported PyArrow 15.0.0. The downstream
-HF suite passed against that core (228 tests), and all 42 new HF
-composition/index tests passed on PyArrow 15.0.0. These historical checks used
-local fixtures; they do not establish survey-scale performance or validation of
-subsequent changes.
-
-## Related design notes
-
-The [grouped UID/spatial proposal](design/grouped-uid-spatial-matching.md)
-describes a deferred possible extension: UID grouping, coordinate-source
-priority, and richer spatial resolution between representative objects without a
-universal anchor. Its stricter coordinate requirement and partial membership
-handling do not apply to this API. It will only be implemented when a concrete
-use case needs it. Broader hub-and-spoke retention modes likewise remain future
-work; this API currently supports inner results only.
+All matching runs in memory. Spatial links execute sequentially; `workers`
+controls queries within each link. The full anchor's spatial kernel and dedupe
+result are prepared once per call and reused across spatial links. Each spoke's
+kernel is released after its candidate edges are built, before preparing the
+next spoke. Calls do not share cached kernels.

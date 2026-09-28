@@ -35,8 +35,7 @@ underscore-prefixed names and intermediate files are implementation details.
 of survey names to `(ra, dec)` tuples, always in degrees. Each pair contains
 aligned one-dimensional array-like values; an ordinary tuple or compatible
 `NamedTuple` works. Mapping order defines survey order, and array order defines
-row positions. The private-development `SurveyCoords` wrapper and
-`survey_coords_from_arrays` factory have been removed.
+row positions.
 
 Both radius arguments are required finite scalars: `radius_arcsec > 0` and
 `dedupe_radius_arcsec >= 0`. Zero disables spatial deduplication. Optional
@@ -44,13 +43,12 @@ Both radius arguments are required finite scalars: `radius_arcsec > 0` and
 `dedupe_radius_arcsec_overrides` maps survey names to nonnegative radii.
 Defaults never accept dictionaries. Unknown names and duplicate unordered pair
 overrides fail. Saved provenance records the expanded radii, so equivalent
-settings have the same scientific metadata. `radius_arcsec_overrides` replaces
-the private-development name `pair_radius_overrides`.
+settings have the same scientific metadata.
 
 Banded builds use the same radius arguments. `match_hub_and_spoke` uses the
 same dedupe default/overrides for spatial participants, while each `SpatialLink`
-sets its matching radius. Its Arrow-table input and UID matching rules are
-unchanged. `match_uids` accepts a mapping of names to identifier arrays.
+sets its matching radius. It accepts Arrow tables; `match_uids` accepts a
+mapping of names to identifier arrays.
 
 Every matching call is self-contained. RA/Dec becomes XYZ at kernel
 construction, once per survey in an in-memory build or once per loaded region
@@ -101,7 +99,6 @@ constructed row tables. Consumers interpreting saved index metadata should
 check the format version explicitly. Reading data with Arrow does not imply
 that its matching semantics are compatible with a newer package.
 
-Unversioned files from private development must be regenerated. Later breaking
-storage changes will increment the format version and be documented; alpha
-releases need not provide migration readers. A producer package version is
-provenance, not by itself a compatibility check.
+Breaking storage changes will increment the format version and be documented;
+alpha releases need not provide migration readers. A producer package version
+is provenance, not by itself a compatibility check.

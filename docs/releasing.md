@@ -52,11 +52,8 @@ Use GitHub environments with those names; restrict their deployment policy to
 release tags (`v*`). No PyPI API token or repository secret is needed. See
 [PyPI's pending-publisher instructions](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
 
-The source repository is currently private. Package uploads expose the source
-included in the wheel and sdist. Make the linked repository documentation and
-issue tracker public before announcing a public release, or provide public
-alternatives and update the package links. A public GitHub repository is not a
-technical prerequisite for a PyPI upload.
+Ensure the package's documentation and issue-tracker links are publicly
+accessible before announcing a public release.
 
 ## Rehearse on TestPyPI
 
@@ -94,6 +91,4 @@ check out or execute repository source and does not rebuild distributions.
 
 Verify a fresh `pip install --pre astribidem` after publishing. Release numbers
 and uploaded filenames cannot be reused; make another alpha version for a
-corrected release rather than moving a tag. Publishing `astribidem-hf` later
-requires replacing its private Git dependency with a compatible released
-astribidem version.
+corrected release rather than moving a tag.

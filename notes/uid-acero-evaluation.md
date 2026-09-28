@@ -1,7 +1,7 @@
 # Direct Acero UID join experiment
 
 **Follow-up:** production now uses the optimized `index_in` approach generalized
-to N sources; see the [implementation decision](uid-matching.md) and
+to N sources; see the [implementation decision](uid-matching-implementation.md) and
 [production measurements](../benchmarks/README.md).
 The experiment and its "Current" measurements below describe the earlier
 implementation at `80aedb8`, before that change.

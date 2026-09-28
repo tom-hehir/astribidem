@@ -14,6 +14,11 @@ interpret astrometric uncertainties, or estimate association probabilities.
 Apply catalogue-specific quality cuts and remove sentinel values upstream:
 (0, 0) is a valid sky position and is not automatically discarded.
 
+Matching computes in float64. Float32 or float16 inputs trigger a warning
+because their rounding already limits positional accuracy: float32 RA is
+spaced up to 0.11 arcsec apart near 360 degrees. Converting a rounded input to
+float64 cannot recover that precision.
+
 An exact candidate search emits the complete inclusive-radius set under the
 floating-point spherical geometry. It does not establish that nearby rows are
 the same physical source. Radius and resolution policy are scientific choices.
@@ -87,10 +92,10 @@ survey combinations. Selection does not hide ambiguity from other surveys.
 
 ## Shared identifiers
 
-Use `match_uids` only when keys refer to the same namespace across sources.
-It performs exact equality with inner, left or outer membership, without any
-position test. Keys must be unique and non-null within each source. Equal
-numbers from unrelated survey-specific ID systems are not shared identifiers.
+Use [`match_uids`](uid-matching.md) only when keys refer to the same namespace
+across sources. It performs exact equality with inner, left or outer membership,
+without any position test. Keys must be unique and non-null within each source.
+Equal numbers from unrelated survey-specific ID systems are not shared identifiers.
 For mixed spatial/UID links, see [hub-and-spoke matching](hub-and-spoke-matching.md).
 
 ## Memory

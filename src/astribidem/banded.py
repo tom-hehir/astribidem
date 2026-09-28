@@ -1,6 +1,6 @@
 """Build candidate edges for catalogs larger than memory, band by band.
 
-The build runs in three steps (see ``docs/design/banded-edge-builds.md``):
+The build runs in three steps (see ``notes/design/banded-edge-builds.md``):
 
 1. ``write_band_layout`` streams each survey's coordinates once and writes
    ``(row, ra, dec)`` grouped by declination band.

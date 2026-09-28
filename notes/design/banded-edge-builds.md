@@ -1,5 +1,7 @@
 # Banded edge builds for catalogs larger than memory
 
+For the supported workflow, see [candidate edges](../../docs/candidate-edges.md).
+
 Status: agreed design, recorded 2026-09-27. Stages 1–4 below are implemented
 (`astribidem.regions`, `astribidem.banded`,
 `astribidem.index_files`); stage 5 belongs to astribidem-hf. This note

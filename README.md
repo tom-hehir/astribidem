@@ -1,195 +1,81 @@
 # astribidem
 
-Standalone astronomical crossmatching, extracted from Tom Hehir’s existing
-Astral and AstroBench implementations. Produces match indexes of row positions,
-optionally mapped to caller IDs, rather than downloading or joining scientific
-payloads. Alpha package: pin an exact version for reproducible applications.
-See the [matching guide](https://github.com/tom-hehir/astribidem/blob/main/docs/matching-guide.md), [API and compatibility](https://github.com/tom-hehir/astribidem/blob/main/docs/api-and-compatibility.md),
-and [release instructions](https://github.com/tom-hehir/astribidem/blob/main/docs/releasing.md).
-
-The name joins Latin *astrum* (“star”) and *ibidem* (“in the same place”).
-In footnotes, *ibid.* means “the same source as before”; a crossmatch decides
-whether two catalogue rows are the same astronomical source.
-
-## Install
-
-Install the alpha from PyPI:
-
-```bash
-python -m pip install --pre astribidem
-# Optional sorting for large saved indexes:
-python -m pip install --pre "astribidem[large]"
-```
-
-For the first release, pin `astribidem==0.0.0a0` in applications. Runtime
-dependencies are NumPy, SciPy and PyArrow (Python 3.11+). There is no Torch,
-Lightning, AION, Astral, HATS or LSDB dependency.
+Astronomical catalogue matching by sky position or shared identifiers.
+Results are Arrow tables of matched row positions, which you can map to your
+own catalogue IDs.
 
 ## Match coordinate arrays
 
-```python
-from astribidem import (
-    crossmatch,
-    rows_to_ids,
-    DegenerateCrossmatchConfig,
-)
+Pass each catalogue as a pair of `(ra, dec)` arrays in degrees, in the same
+celestial frame and epoch.
 
-sources = {"a": ([10.0, 20.0], [0.0, 0.0]), "b": ([10.0001, 30.0], [0.0, 0.0])}
+```python
+from astribidem import DegenerateCrossmatchConfig, crossmatch, rows_to_ids
+
+sources = {
+    "a": ([10.0, 20.0], [0.0, 0.0]),
+    "b": ([10.0001, 30.0], [0.0, 0.0]),
+}
+
+# Match pairs that are each other's nearest neighbours within one arcsecond.
 rows = crossmatch(
     sources,
     radius_arcsec=1.0,
-    dedupe_radius_arcsec=0.0,
+    dedupe_radius_arcsec=0.0,  # Disable within-catalogue deduplication.
     mode=DegenerateCrossmatchConfig(surveys=["a", "b"], policy="mutual_nearest"),
 )
+
+# Contents of `rows`: the matched input row positions and their separation.
+# Separations are rounded here for display.
 # a/row_index | b/row_index | a__b/separation_arcsec
 #           0 |           0 |                   0.36
 
-index = rows_to_ids(rows, {"a": [101, 102], "b": ["b-201", "b-202"]})
-# a/id | b/id  | a__b/separation_arcsec
-#  101 | b-201 |                   0.36
+# Replace row positions with your own IDs, supplied in the original row order.
+index = rows_to_ids(rows, {"a": [101, 102], "b": [201, 202]})
+
+# Contents of `index`: the same match, now labelled with catalogue IDs.
+# a/id | b/id | a__b/separation_arcsec
+#  101 |  201 |                   0.36
 ```
 
-Every index column refers to rows: row `i` of a survey is the `i`-th coordinate
-passed in, and a null row means the survey is absent. Entities are ordered by
-their first present survey, in the order the surveys were passed, and then by
-that survey's row. Use the rows directly for
-positional access, such as `table.take(index["a/row_index"])`, or map them to
-IDs with `rows_to_ids`, which indexes each ID array by the rows. Pass one ID
-per input row, in the same order as the coordinates; the IDs are not checked,
-and their Arrow types are preserved.
+See the [matching guide](https://github.com/tom-hehir/astribidem/blob/main/docs/matching-guide.md)
+for other policies, multiple catalogues and per-catalogue radius settings.
 
-Both radii are explicit scalars. `dedupe_radius_arcsec=0.0` disables dedupe.
-Use `dedupe_radius_arcsec_overrides={"a": 0.5}` for survey exceptions and
-`radius_arcsec_overrides={("a", "b"): 2.0}` for cross-survey pair exceptions.
-Input coordinates must already have catalog-specific cleaning applied and share the appropriate
-celestial frame and epoch. No frame or proper-motion conversion is performed.
-Coordinates must be finite, with declination in [-90, 90]; RA may wrap.
-Pass RA/Dec in degrees as float64: matching always computes in float64, and float32 or float16 inputs
-trigger a warning because their rounding already limits positional accuracy
-(float32 RA is spaced up to 0.11 arcsec apart near 360 deg).
+## Match shared identifiers
 
-## Save and reload an index
-
-An index is an ordinary Arrow table, so save it as Parquet:
+When catalogues share an identifier system, match their unique IDs directly:
 
 ```python
-import pyarrow.parquet as pq
+from astribidem import match_uids
 
-pq.write_table(rows, "index.parquet")
-index = pq.read_table("index.parquet")
-```
+uids = {
+    "images": ["object-B", "object-A"],
+    "spectra": ["object-A", "object-C"],
+}
+matches = match_uids(uids, join="outer")  # Keep every identifier from either catalogue.
 
-Its schema metadata records the index format and producer version,
-plus the matching configuration (`astribidem.resolved_config`), per-survey dedupe outcomes
-(`astribidem.dedupe`), mode settings and the result summary
-(`astribidem.summary`, read with `index_summary(rows)`), so the saved
-file is self-describing. Tables from `rows_to_ids` keep that metadata.
-
-## Match exact UIDs
-
-```python
-from astribidem import match_uids, rows_to_ids
-
-uids = {"images": ["object-B", "object-A"], "spectra": ["object-A", "object-C"]}
-matches = match_uids(uids, join="outer")
+# Contents of `matches`: input row positions; null means no match in that catalogue.
 # entity_id | images/row_index | spectra/row_index
 #         0 |                0 |              null
 #         1 |                1 |                 0
 #         2 |             null |                 1
-
-matches = rows_to_ids(matches, {"images": [101, 102], "spectra": [201, 202]})
-# entity_id | images/id | spectra/id
-#         0 |       101 |       null
-#         1 |       102 |        201
-#         2 |      null |        202
 ```
 
-UIDs are exact equality keys, without coordinates or a radius. Like coordinate
-matching, `match_uids` returns rows: row `i` of a source is its `i`-th UID, and
-null means the source is absent. Map rows to observation IDs, or back to the
-UIDs themselves with `rows_to_ids(matches, uids)`. Keys must be unique and
-non-null within each source; duplicates are rejected rather than silently
-expanded into a Cartesian join. Integer keys compare exactly across integer
-widths/signedness, including uint64; string keys are case-sensitive. Integer and
-string keys cannot be mixed. `rows_to_ids` preserves ID Arrow types.
+Use `join="inner"` to keep only shared identifiers. See
+[UID matching](https://github.com/tom-hehir/astribidem/blob/main/docs/uid-matching.md)
+for join options and mapping the results to IDs.
 
-`join="inner"` (default) retains keys present in every source; `"left"` retains
-all anchor keys; `"outer"` retains all keys. The anchor defaults to the first
-mapping entry and can be named with `anchor="spectra"`. Rows follow anchor input
-order, with outer joins appending unseen keys in the remaining sources' input
-order. Column order follows the mapping. Matching policy and types are recorded
-in Arrow schema metadata. This join, like coordinate matching, runs in memory.
+## Save an index
 
-Keys and row lookups stay in native Arrow arrays and hash kernels; the matcher
-does not create a Python object per key. Integer types are normalized losslessly
-before comparison. Mixed signed/uint64 keys use fixed-width decimal128 with
-scale zero when no standard integer type can represent both domains. The
-[UID implementation decision](https://github.com/tom-hehir/astribidem/blob/main/docs/uid-matching.md)
-records the Arrow-native choice, requirements, alternatives and threading
-tradeoffs. See the [UID benchmark](https://github.com/tom-hehir/astribidem/blob/main/benchmarks/README.md) for measured time and
-memory use; native hash tables still consume memory.
+Results are ordinary Arrow tables, so they can be saved as Parquet:
 
-## Scientific contracts
+```python
+import pyarrow.parquet as pq
 
-For independent links to one anchor, use the separate
-[`match_hub_and_spoke` API](https://github.com/tom-hehir/astribidem/blob/main/docs/hub-and-spoke-matching.md). Each link can use UID
-or spatial matching; all-UID, all-spatial and mixed-link configurations are
-supported. It intersects full-input link results, requiring every spoke to
-match the anchor without checking spoke-to-spoke relationships, and returns
-row columns like every other matcher. The richer spatial `crossmatch` modes and N-source
-`match_uids` joins remain separate APIs.
-
-- The kernel emits the complete inclusive-radius candidate set.
-- Pair policies: anchored_nearest, anchored_unique, mutual_nearest, mutual_unique.
-- Degenerate subset joins require mutual pairwise agreement for N > 2; anchored
-  policies in this interface accept two surveys.
-- EntitywiseCrossmatchConfig supports refuse, sequential and split resolvers,
-  nullable absent memberships, disputed singleton/drop handling and selection.
-- The separate `astribidem.geometry` array adapter preserves AstroBench’s
-  N-way anchor-pairs and all-pairs topology API, returning positional arrays.
-- Per-survey dedupe keeps the lowest row of each duplicate group, so the kept
-  row follows input order. Sort the inputs first when their order is arbitrary.
-- The spatial `crossmatch` core reproduces AION-2's crossmatch output exactly;
-  `tests/test_aion_parity.py` checks this against recorded AION-2 indexes.
-
-`crossmatch` builds candidate edges and resolves them in one call. To resolve
-the same edges under several modes, save them, or stream them to disk while
-building, use `build_edges`, `resolve`, `write_edges`, `read_edges` and
-`build_edges_to_directory`; `audit_edges` summarises dedupe, pair and
-component statistics. See [candidate edges](https://github.com/tom-hehir/astribidem/blob/main/docs/candidate-edges.md).
-For catalogs larger than memory, `write_band_layout` and `build_edges_by_band`
-build the same edges one declination band at a time, and `resolve_to_file`
-resolves them segment by segment into one index file, sorted with the optional
-DuckDB dependency (`astribidem[large]`); see
-[candidate edges](https://github.com/tom-hehir/astribidem/blob/main/docs/candidate-edges.md#build-edges-band-by-band) and the
-[banded edge build design](https://github.com/tom-hehir/astribidem/blob/main/docs/design/banded-edge-builds.md).
-
-## Design proposals
-
-The [grouped UID/spatial design](https://github.com/tom-hehir/astribidem/blob/main/docs/design/grouped-uid-spatial-matching.md)
-records a deferred possible extension: select one representative position per
-UID-defined object, then apply richer spatial resolution and partial-membership
-policies without requiring a universal anchor. Current UID/spatial composition
-uses hub-and-spoke matching. The grouped design will only be implemented when a
-concrete use case needs it; no implementation or AION-2 integration is planned.
-
-The [banded edge build design](https://github.com/tom-hehir/astribidem/blob/main/docs/design/banded-edge-builds.md) records the
-agreed plan for catalogs larger than memory: declination bands with a margin,
-deferral of groups that cross band boundaries to a sweep over the boundaries,
-and saved edges made of self-contained segments. It also records every option
-considered and why it was accepted or rejected. Its stages in this package are
-implemented.
-
-## Development
-
-```bash
-uv sync --locked --extra dev
-uv run --no-sync pre-commit run --all-files
-uv run --no-sync pytest
+pq.write_table(index, "index.parquet")
+index = pq.read_table("index.parquet")
 ```
 
-The inherited tests include independent brute-force and Astropy comparisons,
-threshold boundaries, dedupe, disputes, and N-way matching. The AION-2 parity
-test uses indexes recorded by `tests/fixtures/generate_aion_parity.py`, which
-runs in an AION-2 environment.
-See [provenance](https://github.com/tom-hehir/astribidem/blob/main/docs/provenance.md).
+See the [documentation](https://github.com/tom-hehir/astribidem/blob/main/docs/README.md)
+for mixed UID/coordinate matching, larger-than-memory workflows, API details
+and development instructions.
