@@ -3,6 +3,7 @@
 ``fixtures/aion_parity.npz`` holds synthetic catalogs and the indexes AION-2
 built from them; ``fixtures/generate_aion_parity.py`` records it. Rows here are
 AION-2's ``row_index`` values, so every column must agree element for element.
+Resolving saved, reloaded or streamed edges must give the same indexes.
 """
 
 import sys
@@ -15,8 +16,13 @@ from astro_crossmatch import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
+    build_edges,
+    build_edges_to_directory,
     crossmatch,
+    read_edges,
+    resolve,
     survey_coords_from_arrays,
+    write_edges,
 )
 
 FIXTURES = Path(__file__).with_name("fixtures")
@@ -51,16 +57,36 @@ def surveys():
     ]
 
 
+SETTINGS = {
+    "radius_arcsec": RADIUS_ARCSEC,
+    "dedupe_radius_arcsec": DEDUPE_RADIUS_ARCSEC,
+    "pair_radius_overrides": {PAIR_RADIUS_OVERRIDE[0]: PAIR_RADIUS_OVERRIDE[1]},
+}
+
+
+@pytest.fixture(scope="module")
+def edge_sources(surveys, tmp_path_factory):
+    """Each way of handing all-pair candidate edges to ``resolve``."""
+    in_memory = build_edges(surveys, **SETTINGS)
+    saved = tmp_path_factory.mktemp("saved")
+    write_edges(in_memory, saved)
+    streamed = tmp_path_factory.mktemp("streamed")
+    build_edges_to_directory(surveys, streamed, workers=3, chunk_rows=500, **SETTINGS)
+    return {
+        "in_memory": in_memory,
+        "saved": read_edges(saved),
+        "streamed": read_edges(streamed),
+    }
+
+
+@pytest.mark.parametrize("source", ["crossmatch", "in_memory", "saved", "streamed"])
 @pytest.mark.parametrize("label", CASES)
-def test_crossmatch_reproduces_aion_output(surveys, label):
+def test_reproduces_aion_output(surveys, edge_sources, label, source):
     kind, arguments = CASES[label]
-    table = crossmatch(
-        surveys,
-        radius_arcsec=RADIUS_ARCSEC,
-        dedupe_radius_arcsec=DEDUPE_RADIUS_ARCSEC,
-        pair_radius_overrides={PAIR_RADIUS_OVERRIDE[0]: PAIR_RADIUS_OVERRIDE[1]},
-        mode=mode(kind, arguments),
-    ).table
+    if source == "crossmatch":
+        table = crossmatch(surveys, mode=mode(kind, arguments), **SETTINGS).table
+    else:
+        table = resolve(edge_sources[source], mode(kind, arguments)).table
     expected = {
         key.removeprefix(f"{label}/"): value
         for key, value in EXPECTED.items()

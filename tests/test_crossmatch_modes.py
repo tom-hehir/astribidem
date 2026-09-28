@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from itertools import combinations
+
 import numpy as np
 import pyarrow as pa
 import pytest
-from astro_crossmatch.inputs import (
-    PairEdges,
-    ResolveInputs,
-)
+
+from astro_crossmatch.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
 from astro_crossmatch.modes import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
@@ -16,44 +16,40 @@ from astro_crossmatch.modes import (
     one_to_one_pairs,
 )
 
+EMPTY = np.empty(0, dtype=np.int64)
+
 
 def _inputs(surveys, edges, *, disputed=None):
-    """Assemble ResolveInputs from {name: n_rows} and per-pair edge triples.
+    """Assemble CandidateEdges from {name: n_rows} and per-pair edge triples.
 
-    ``edges`` maps (a, b) -> (row_a, row_b, sep) in positions. All rows are
-    active unless ``disputed`` lists positions for a survey (disputed rows
-    are also removed from active, as dedupe would).
+    ``edges`` maps (a, b) -> (row_a, row_b, separation) in row positions;
+    unlisted pairs have no edges. All rows are active unless ``disputed``
+    lists rows for a survey, as dedupe would.
     """
     disputed = disputed or {}
-    active = {}
-    for name, n in surveys.items():
-        mask = np.ones(n, dtype=bool)
-        mask[disputed.get(name, [])] = False
-        active[name] = np.flatnonzero(mask)
+    outcomes = tuple(
+        DedupeOutcome(
+            name=name,
+            n_rows=n,
+            dedupe_radius_arcsec=0.0,
+            dropped_rows=EMPTY,
+            kept_rows=EMPTY,
+            disputed_rows=np.asarray(disputed.get(name, []), dtype=np.int64),
+        )
+        for name, n in surveys.items()
+    )
     pairs = {}
-    radii = {}
-    for (a, b), (row_a, row_b, sep) in edges.items():
+    for a, b in combinations(surveys, 2):
+        row_a, row_b, separation = edges.get((a, b), ([], [], []))
         pairs[frozenset((a, b))] = PairEdges(
             survey_a=a,
             survey_b=b,
             radius_arcsec=1.0,
             row_a=np.asarray(row_a, dtype=np.int64),
             row_b=np.asarray(row_b, dtype=np.int64),
-            sep_arcsec=np.asarray(sep, dtype=np.float64),
+            separation_arcsec=np.asarray(separation, dtype=np.float64),
         )
-    names = list(surveys)
-    for i, a in enumerate(names):
-        for b in names[i + 1 :]:
-            radii[frozenset((a, b))] = 1.0
-    return ResolveInputs(
-        survey_names=tuple(names),
-        active_row_index=active,
-        dedupe_disputed={
-            name: np.asarray(rows, dtype=np.int64) for name, rows in disputed.items()
-        },
-        pairs=pairs,
-        pair_radius_arcsec=radii,
-    )
+    return CandidateEdges(surveys=outcomes, pairs=pairs)
 
 
 # --- policy reductions -------------------------------------------------------

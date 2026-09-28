@@ -31,6 +31,9 @@ exists only to manufacture parallel calls (serially it costs ~2.5x); the
 chunk count is capped by a minimum chunk size so small inputs stay one-shot.
 Because chunks partition ``i`` in order and each chunk is lexsorted, the
 concatenated output is bit-identical to the one-shot join.
+``all_pairs_chunks`` yields the same chunks in order with at most ``workers``
+in flight, so a consumer that writes each chunk out holds only
+``workers * chunk_rows`` query rows' worth of pairs at a time.
 
 Deliberately absent: a minimum-radius "too close" veto. The old matching
 layer's ``min_radius_arcsec`` veto was its only guard against duplicates and
@@ -43,8 +46,10 @@ from __future__ import annotations
 
 import math
 import os
+from collections import deque
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from typing import Iterator
+from itertools import pairwise
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -121,7 +126,7 @@ class CatalogKernel:
         self._init_from_xyz(radec_to_xyz(ra, dec))
 
     @classmethod
-    def from_xyz(cls, xyz: np.ndarray) -> "CatalogKernel":
+    def from_xyz(cls, xyz: np.ndarray) -> CatalogKernel:
         """Build from ``(n, 3)`` unit vectors already on the sphere."""
         xyz = np.asarray(xyz, dtype=np.float64)
         if xyz.ndim != 2 or xyz.shape[1] != 3:
@@ -155,7 +160,7 @@ class CatalogKernel:
 
     def all_pairs(
         self,
-        other: "CatalogKernel",
+        other: CatalogKernel,
         radius_arcsec: float,
         k: int | None = None,
         *,
@@ -208,9 +213,26 @@ class CatalogKernel:
         order = np.lexsort((j, i))
         return i[order], j[order], sep[order]
 
+    def all_pairs_chunks(
+        self,
+        other: CatalogKernel,
+        radius_arcsec: float,
+        *,
+        workers: int = 1,
+        chunk_rows: int | None = None,
+    ) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """The complete ``all_pairs`` join as an ordered stream of chunks.
+
+        Each chunk covers a contiguous slice of this kernel's rows, and the
+        chunks concatenate to exactly ``all_pairs(other, radius_arcsec)``. At
+        most ``workers`` chunks are computed or buffered at once.
+        """
+        chord = _validate_radius(radius_arcsec)
+        yield from self._all_pairs_chunk_arrays(other, chord, workers, chunk_rows)
+
     def _all_pairs_chunk_arrays(
         self,
-        other: "CatalogKernel",
+        other: CatalogKernel,
         chord: float,
         workers: int,
         chunk_rows: int | None,
@@ -235,13 +257,17 @@ class CatalogKernel:
                 chord_to_arcsec(m["v"]),
             )
 
-        spans = list(zip(bounds[:-1], bounds[1:]))
+        spans = list(pairwise(bounds))
         if workers == 1 or len(spans) == 1:
             for lo, hi in spans:
                 yield join(lo, hi)
             return
 
         with ThreadPoolExecutor(workers) as pool:
-            futures = [pool.submit(join, lo, hi) for lo, hi in spans]
-            for future in futures:
-                yield future.result()
+            pending = deque(pool.submit(join, lo, hi) for lo, hi in spans[:workers])
+            for lo, hi in spans[workers:]:
+                result = pending.popleft().result()
+                pending.append(pool.submit(join, lo, hi))
+                yield result
+            while pending:
+                yield pending.popleft().result()

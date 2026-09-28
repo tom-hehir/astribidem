@@ -112,8 +112,12 @@ typed ID columns. The richer spatial `crossmatch` modes and N-source
 - The spatial `crossmatch` core reproduces AION-2's crossmatch output exactly;
   `tests/test_aion_parity.py` checks this against recorded AION-2 indexes.
 
-Coordinate arrays and candidate relations are currently held in memory. This
-package is not yet a distributed or out-of-core survey processing engine.
+`crossmatch` builds candidate edges and resolves them in one call. To resolve
+the same edges under several modes, save them, or stream them to disk while
+building, use `build_edges`, `resolve`, `write_edges`, `read_edges` and
+`build_edges_to_directory`; see [candidate edges](docs/candidate-edges.md).
+Coordinates and KD-trees are always held in memory. This package is not yet a
+distributed or out-of-core survey processing engine.
 
 ## Design proposals
 

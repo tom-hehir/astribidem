@@ -23,11 +23,9 @@ from collections.abc import Iterable, Sequence
 from typing import Literal
 
 import numpy as np
-from astro_crossmatch.edges import (
-    DedupeOutcome,
-    dedupe_survey,
-    survey_coords_from_arrays,
-)
+
+from astro_crossmatch.candidate_edges import DedupeOutcome
+from astro_crossmatch.edges import dedupe_survey, survey_coords_from_arrays
 from astro_crossmatch.kernel import (
     CatalogKernel,
     arcsec_to_chord,
@@ -271,7 +269,7 @@ def dedupe_radec(
         name: Dataset name, carried into the outcome for reporting.
 
     Returns:
-        The :class:`DedupeOutcome` (dropped / keeper / disputed row indices)
+        The :class:`DedupeOutcome` (dropped / kept / disputed rows)
         and the boolean active-row mask (``True`` = row survives).
     """
     coords = survey_coords_from_arrays(name, ra, dec)
