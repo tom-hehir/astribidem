@@ -12,11 +12,11 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from astro_crossmatch.api import crossmatch
-from astro_crossmatch.edges import survey_coords_from_arrays
-from astro_crossmatch.kernel import float64_coordinates, resolve_workers
-from astro_crossmatch.modes import SUBSET_JOIN_POLICIES, DegenerateCrossmatchConfig
-from astro_crossmatch.uids import match_uids
+from astribidem.api import crossmatch
+from astribidem.edges import survey_coords_from_arrays
+from astribidem.kernel import float64_coordinates, resolve_workers
+from astribidem.modes import SUBSET_JOIN_POLICIES, DegenerateCrossmatchConfig
+from astribidem.uids import match_uids
 
 
 def _radius(value: float, *, allow_zero: bool = False) -> float:
@@ -169,7 +169,7 @@ def match_hub_and_spoke(
                 "method": "uid",
                 "uid_columns": uid_columns,
                 "resolved_config": json.loads(
-                    pair.schema.metadata[b"astro_crossmatch.resolved_config"]
+                    pair.schema.metadata[b"astribidem.resolved_config"]
                 ),
             }
         else:
@@ -190,9 +190,9 @@ def match_hub_and_spoke(
                 "radius_arcsec": link.radius_arcsec,
                 "policy": link.policy,
                 "resolved_config": json.loads(
-                    pair.schema.metadata[b"astro_crossmatch.resolved_config"]
+                    pair.schema.metadata[b"astribidem.resolved_config"]
                 ),
-                "dedupe": json.loads(pair.schema.metadata[b"astro_crossmatch.dedupe"]),
+                "dedupe": json.loads(pair.schema.metadata[b"astribidem.dedupe"]),
             }
         link_provenance[name]["n_matches"] = pair.num_rows
         # Link decisions above always use full inputs. Only their completed
@@ -222,7 +222,7 @@ def match_hub_and_spoke(
         columns[f"{name}/row_index"] = pc.cast(rows.pop(name), pa.int64())
     return pa.table(columns).replace_schema_metadata(
         {
-            b"astro_crossmatch.resolved_config": json.dumps(
+            b"astribidem.resolved_config": json.dumps(
                 configuration, sort_keys=True, separators=(",", ":"), allow_nan=False
             ).encode()
         }

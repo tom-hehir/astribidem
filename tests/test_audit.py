@@ -4,7 +4,7 @@ import json
 
 import numpy as np
 
-from astro_crossmatch import (
+from astribidem import (
     audit_edges,
     build_edges,
     read_edges,

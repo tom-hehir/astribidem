@@ -6,7 +6,7 @@ import numpy as np
 import pyarrow.parquet as pq
 import pytest
 
-from astro_crossmatch import (
+from astribidem import (
     CatalogKernel,
     DegenerateCrossmatchConfig,
     EntitywiseCrossmatchConfig,
@@ -18,7 +18,7 @@ from astro_crossmatch import (
     survey_coords_from_arrays,
     write_edges,
 )
-from astro_crossmatch import kernel as kernel_module
+from astribidem import kernel as kernel_module
 
 
 def survey(name, offsets_arcsec):
@@ -185,7 +185,7 @@ def test_writers_refuse_colliding_pair_file_names(tmp_path):
 
 def restrict(edges, rows_by_survey):
     """The segment of ``edges`` covering the given rows of each survey."""
-    from astro_crossmatch import CandidateEdges, DedupeOutcome, PairEdges
+    from astribidem import CandidateEdges, DedupeOutcome, PairEdges
 
     surveys = []
     for survey in edges.surveys:
@@ -231,14 +231,14 @@ PATCH_ROWS = [
 def test_combined_segments_equal_the_whole_build():
     edges = build_edges(PATCHES, **SETTINGS)
     segments = [restrict(edges, rows) for rows in PATCH_ROWS]
-    from astro_crossmatch import combine_segments
+    from astribidem import combine_segments
 
     assert_same_edges(combine_segments(segments), edges)
 
 
 def test_segments_save_their_rows_and_reload(tmp_path):
-    from astro_crossmatch import read_segment, segment_names, write_segment
-    from astro_crossmatch.edge_files import write_metadata
+    from astribidem import read_segment, segment_names, write_segment
+    from astribidem.edge_files import write_metadata
 
     edges = build_edges(PATCHES, **SETTINGS)
     segments = [restrict(edges, rows) for rows in PATCH_ROWS]

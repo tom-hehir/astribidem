@@ -8,8 +8,8 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-from astro_crossmatch.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
-from astro_crossmatch.modes import (
+from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
+from astribidem.modes import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
@@ -93,7 +93,7 @@ def test_degenerate_two_survey_join_emits_rows_and_separations():
     seps = table.column("a__b/separation_arcsec").to_pylist()
     assert seps == pytest.approx([0.1, 0.2], abs=1e-6)
     metadata = table.schema.metadata
-    assert metadata[b"astro_crossmatch.match_index.mode"] == b"degenerate"
+    assert metadata[b"astribidem.match_index.mode"] == b"degenerate"
     assert index_summary(result)["n_groups"] == 2
 
 

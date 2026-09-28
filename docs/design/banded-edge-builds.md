@@ -1,8 +1,8 @@
 # Banded edge builds for catalogs larger than memory
 
 Status: agreed design, recorded 2026-09-27. Stages 1–4 below are implemented
-(`astro_crossmatch.regions`, `astro_crossmatch.banded`,
-`astro_crossmatch.index_files`); stage 5 belongs to hf-crossmatch. This note
+(`astribidem.regions`, `astribidem.banded`,
+`astribidem.index_files`); stage 5 belongs to astribidem-hf. This note
 records the plan for building candidate edges and resolving them when survey
 catalogs do not fit in memory, together with every option considered and the
 reason each was accepted or rejected. The implementation stages at the end
@@ -214,18 +214,18 @@ can be turned off.
 The banded build reads only the regrouped coordinates, so any input that can
 stream coordinates in row order can feed it:
 
-- HATS catalogs on Hugging Face stream through hf-crossmatch's coordinate scan
+- HATS catalogs on Hugging Face stream through astribidem-hf's coordinate scan
   in shard order. Margin catalogs are never scanned, because they duplicate
   rows.
 - AION-2 Lance token tables stream coordinates in fragment order, so row
   numbers equal the Lance row offsets that `<catalog>/row_index` already means.
 - Local Parquet files stream row groups in file order.
 
-hf-crossmatch currently builds an in-memory table of IDs, coordinates and file
+astribidem-hf currently builds an in-memory table of IDs, coordinates and file
 locations during its scan. Using the banded build on catalogs of 10⁹ rows
 needs that scan to write coordinates into the regrouped file and IDs and
 locations into an on-disk table in row order, so that materialization can look
-up matched rows by number. That change belongs in hf-crossmatch and follows the
+up matched rows by number. That change belongs in astribidem-hf and follows the
 core work.
 
 ### Memory and I/O
@@ -264,7 +264,7 @@ densities, and a chain that spans three bands.
    final or deferred.
 3. The regrouping pass and the boundary sweep.
 4. Resolving segments in parallel, and merging their outputs in order.
-5. The streamed scan in hf-crossmatch, as a separate pull request.
+5. The streamed scan in astribidem-hf, as a separate pull request.
 
 Lance input follows once the regrouping pass exists, since a Lance table
 becomes one more source of streamed coordinates.
@@ -330,7 +330,7 @@ macauff also splits the sky into small regions that are matched separately
 | One format for every build, with an in-memory build as a single segment | accepted | Every reader has one code path. |
 | Separate flat and segmented formats | rejected | Writing both is easy, but every reader would need two code paths. |
 | Segment directories inside a `parts/` directory | rejected | The extra level adds nothing, because `metadata.json` already lists the segments. |
-| The terms part, chunk, shard, fragment or partition | rejected | "Part" names hf-crossmatch output files, "chunk" names `chunk_rows` streaming, "shard" names hf-crossmatch and HATS files, "fragment" names Lance fragments, and "partition" names HATS and Arrow partitions. "Segment" has no existing meaning in either repository. |
+| The terms part, chunk, shard, fragment or partition | rejected | "Part" names astribidem-hf output files, "chunk" names `chunk_rows` streaming, "shard" names astribidem-hf and HATS files, "fragment" names Lance fragments, and "partition" names HATS and Arrow partitions. "Segment" has no existing meaning in either repository. |
 | Numbered segments with their kind recorded in metadata | rejected | Descriptive names (`band-k`, `boundary-k`, `segment-0`) are clearer. |
 
 ### Index order
@@ -341,13 +341,13 @@ macauff also splits the sky into small regions that are matched separately
 | By the combination of surveys present, then row | recorded | Each combination forms a contiguous block, but the combinations need their own order, and filtering on non-null row columns already selects a combination cheaply. |
 | By entity kind (clean, ambiguous, disputed), then row | recorded | This resembles the current order; filtering on `disputed_reason` already separates the kinds cheaply. |
 | By the number of surveys present, then row | recorded | This is a coarser form of ordering by combination. |
-| By position on the sky | recorded | `resolve` has no coordinates; hf-crossmatch's `spatial_order` already orders materialized output for payload locality. |
+| By position on the sky | recorded | `resolve` has no coordinates; astribidem-hf's `spatial_order` already orders materialized output for payload locality. |
 | Restore the current in-memory order exactly | rejected | The current entitywise order has three blocks with different rules, which is complicated to reproduce and serves no consumer. |
 | Unordered | available | The sort can be turned off, leaving segment order. |
 
-### Sequencing with hf-crossmatch
+### Sequencing with astribidem-hf
 
 | Option | Outcome | Reason |
 | ------ | ------- | ------ |
-| Build and test the banded core first, then change hf-crossmatch's scan | accepted | Each change stays focused, and the core is checked against the in-memory build before anything depends on it. |
+| Build and test the banded core first, then change astribidem-hf's scan | accepted | Each change stays focused, and the core is checked against the in-memory build before anything depends on it. |
 | Change both together | rejected | It would be one much larger change across two repositories. |

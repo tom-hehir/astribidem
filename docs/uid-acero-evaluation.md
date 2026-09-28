@@ -118,12 +118,12 @@ From the repository root with its NumPy/PyArrow dependencies installed:
 
 ```sh
 python benchmarks/benchmark_uid_acero.py \
-  --module src/astro_crossmatch/uids.py --check-only
+  --module src/astribidem/uids.py --check-only
 python benchmarks/benchmark_uid_acero.py \
-  --module src/astro_crossmatch/uids.py --rows 500000 \
+  --module src/astribidem/uids.py --rows 500000 \
   --output /tmp/uid-acero-500k.json
 python benchmarks/benchmark_uid_acero.py \
-  --module src/astro_crossmatch/uids.py --rows 2000000 --compact \
+  --module src/astribidem/uids.py --rows 2000000 --compact \
   --output /tmp/uid-acero-2m.json
 ```
 

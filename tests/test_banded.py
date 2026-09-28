@@ -8,7 +8,7 @@ import numpy as np
 import pyarrow.parquet as pq
 import pytest
 
-from astro_crossmatch import (
+from astribidem import (
     EntitywiseCrossmatchConfig,
     build_edges,
     read_edges,
@@ -17,7 +17,7 @@ from astro_crossmatch import (
     segment_names,
     survey_coords_from_arrays,
 )
-from astro_crossmatch.banded import (
+from astribidem.banded import (
     as_chunks,
     build_band,
     build_edges_by_band,

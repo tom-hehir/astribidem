@@ -3,7 +3,7 @@ requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "astro-crossmatch"
+name = "astribidem"
 version = "0.1.0a1"
 description = "Exact astronomical crossmatching with stable-ID match indexes."
 readme = "README.md"
@@ -23,10 +23,10 @@ test = ["pytest>=8", "astropy>=6", "duckdb>=1.4"]
 dev = ["pytest>=8", "astropy>=6", "duckdb>=1.4", "ruff>=0.9"]
 
 [project.urls]
-Repository = "https://github.com/tom-hehir/astro-crossmatch"
+Repository = "https://github.com/tom-hehir/astribidem"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/astro_crossmatch"]
+packages = ["src/astribidem"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

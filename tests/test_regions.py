@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from astro_crossmatch import (
+from astribidem import (
     DegenerateCrossmatchConfig,
     EntitywiseCrossmatchConfig,
     build_edges,
@@ -15,8 +15,8 @@ from astro_crossmatch import (
     resolve,
     survey_coords_from_arrays,
 )
-from astro_crossmatch.edges import edge_settings
-from astro_crossmatch.regions import (
+from astribidem.edges import edge_settings
+from astribidem.regions import (
     MARGIN_ABOVE,
     MARGIN_BELOW,
     OWNED,

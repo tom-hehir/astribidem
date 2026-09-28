@@ -12,7 +12,7 @@ later.
 ## Build and resolve in memory
 
 ```python
-from astro_crossmatch import (
+from astribidem import (
     DegenerateCrossmatchConfig, EntitywiseCrossmatchConfig, build_edges, resolve,
 )
 
@@ -40,7 +40,7 @@ serve only degenerate modes over those pairs; `resolve` rejects any other mode.
 ## Save and reload
 
 ```python
-from astro_crossmatch import read_edges, write_edges
+from astribidem import read_edges, write_edges
 
 write_edges(edges, "edges-directory")
 edges = read_edges("edges-directory")
@@ -81,7 +81,7 @@ When the edges are too large to hold in memory, write them while they are
 found:
 
 ```python
-from astro_crossmatch import build_edges_to_directory
+from astribidem import build_edges_to_directory
 
 build_edges_to_directory(
     surveys,
@@ -111,8 +111,8 @@ declination band at a time. The build first streams every survey's
 coordinates into a layout grouped by band:
 
 ```python
-from astro_crossmatch import build_edges_by_band, write_band_layout
-from astro_crossmatch.banded import as_chunks
+from astribidem import build_edges_by_band, write_band_layout
+from astribidem.banded import as_chunks
 
 write_band_layout(
     "layout-directory",
@@ -148,7 +148,7 @@ To resolve large saved edges without loading every segment at once, use
 `resolve_to_file`:
 
 ```python
-from astro_crossmatch import EntitywiseCrossmatchConfig, resolve_to_file
+from astribidem import EntitywiseCrossmatchConfig, resolve_to_file
 
 resolve_to_file(
     "edges-directory",
@@ -164,7 +164,7 @@ survey, then that survey's row. The file equals
 `resolve(read_edges(...), mode)`, metadata included.
 
 The sort runs in DuckDB, installed with the `large` extra
-(`astro-crossmatch[large]`). DuckDB spills to disk beyond `memory_limit`, such
+(`astribidem[large]`). DuckDB spills to disk beyond `memory_limit`, such
 as `"4GB"`, using `threads` threads; when the limit is too small for the
 threads, the sort stops with a `MemoryError`. DuckDB could write the sorted
 index to Parquet itself, which is faster, but it would choose the column types
@@ -180,7 +180,7 @@ band has run.
 ## Audit the edges
 
 ```python
-from astro_crossmatch import audit_edges
+from astribidem import audit_edges
 
 audit = audit_edges(edges)  # a dictionary of plain JSON types
 ```

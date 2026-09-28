@@ -7,8 +7,8 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-from astro_crossmatch import SpatialLink, UIDLink, rows_to_ids
-from astro_crossmatch import match_hub_and_spoke as match_hub_and_spoke_rows
+from astribidem import SpatialLink, UIDLink, rows_to_ids
+from astribidem import match_hub_and_spoke as match_hub_and_spoke_rows
 
 
 def match_hub_and_spoke(catalogs, **kwargs):
@@ -74,7 +74,7 @@ def test_four_sources_intersect_links_in_anchor_order_and_keep_column_order(
         "sky/id": [240, 230],
         "last/id": [304, 303],
     }
-    metadata = json.loads(result.schema.metadata[b"astro_crossmatch.resolved_config"])
+    metadata = json.loads(result.schema.metadata[b"astribidem.resolved_config"])
     assert metadata["method"] == "hub_and_spoke"
     assert metadata["anchor"] == "anchor"
     assert metadata["join"] == "inner"
@@ -100,7 +100,7 @@ def test_earlier_uid_filter_does_not_remove_full_input_spatial_competitor(uid_fi
         dedupe_radius_arcsec={"a": 0, "sky": 0},
     )
     assert result.num_rows == 0
-    metadata = json.loads(result.schema.metadata[b"astro_crossmatch.resolved_config"])
+    metadata = json.loads(result.schema.metadata[b"astribidem.resolved_config"])
     assert metadata["links"]["uid"]["n_matches"] == 1
     assert metadata["links"]["sky"]["n_matches"] == 1
 
@@ -118,7 +118,7 @@ def test_uid_eligibility_does_not_change_full_anchor_dedupe_keeper():
         dedupe_radius_arcsec={"a": 0.2, "sky": 0},
     )
     assert result.num_rows == 0
-    metadata = json.loads(result.schema.metadata[b"astro_crossmatch.resolved_config"])
+    metadata = json.loads(result.schema.metadata[b"astribidem.resolved_config"])
     assert metadata["links"]["sky"]["dedupe"]["a"]["n_dropped"] == 1
 
 
@@ -175,7 +175,7 @@ def test_spatial_dedupe_keeps_first_row_and_original_arrow_type(id_type, values)
     assert result["a/id"].to_pylist() == [values[0]]
     assert result["sky/id"].type == pa.uint64()
     assert result["sky/id"].to_pylist() == [2**64 - 1]
-    metadata = json.loads(result.schema.metadata[b"astro_crossmatch.resolved_config"])
+    metadata = json.loads(result.schema.metadata[b"astribidem.resolved_config"])
     assert metadata["links"]["sky"]["dedupe"]["a"]["n_dropped"] == 2
 
 

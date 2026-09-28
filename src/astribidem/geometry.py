@@ -1,7 +1,7 @@
 """Array-oriented matching adapters extracted from AstroBench.
 
 The shared primitives own the matching semantics: the scipy cKDTree kernel
-(:class:`~astro_crossmatch.kernel.CatalogKernel`),
+(:class:`~astribidem.kernel.CatalogKernel`),
 the pairwise policy reductions (``one_to_one_pairs``), and the per-survey
 geometric dedupe (``dedupe_survey``). This adapter exposes positional results
 for callers working directly with in-memory arrays:
@@ -11,7 +11,7 @@ for callers working directly with in-memory arrays:
   matching layer for in-memory group matching;
 * collision *detection* — a separate masking operation, not a crossmatch
   mode. Prefer the entity-level index
-  (:func:`~astro_crossmatch.crossmatch`)
+  (:func:`~astribidem.crossmatch`)
   when "each physical object appears at most once" semantics are needed: the
   entity index resolves components explicitly instead of masking both sides
   of every collision.
@@ -24,16 +24,16 @@ from typing import Literal
 
 import numpy as np
 
-from astro_crossmatch.candidate_edges import DedupeOutcome
-from astro_crossmatch.edges import dedupe_survey, survey_coords_from_arrays
-from astro_crossmatch.kernel import (
+from astribidem.candidate_edges import DedupeOutcome
+from astribidem.edges import dedupe_survey, survey_coords_from_arrays
+from astribidem.kernel import (
     CatalogKernel,
     arcsec_to_chord,
     chord_to_arcsec,
     float64_coordinates,
     radec_to_xyz,
 )
-from astro_crossmatch.modes import one_to_one_pairs
+from astribidem.modes import one_to_one_pairs
 
 MatchPolicy = Literal[
     "anchored_nearest",

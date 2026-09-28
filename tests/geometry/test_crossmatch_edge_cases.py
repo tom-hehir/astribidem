@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from astro_crossmatch.geometry import (
+from astribidem.geometry import (
     crossmatch_radec as crossmatch,
     detect_collisions,
 )

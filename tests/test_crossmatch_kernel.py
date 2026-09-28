@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from astro_crossmatch.kernel import (
+from astribidem.kernel import (
     CatalogKernel,
     arcsec_to_chord,
     chord_to_arcsec,

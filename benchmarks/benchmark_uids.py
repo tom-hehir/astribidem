@@ -1,7 +1,7 @@
 """Compare UID implementations in sequential, isolated worker processes.
 
 Example:
-    python benchmark_uids.py --module src/astro_crossmatch/uids.py --label arrays
+    python benchmark_uids.py --module src/astribidem/uids.py --label arrays
 
 Inputs and correctness checks are outside the timed region. Every worker warms
 up its implementation first, builds typed arrays, then measures one match call.

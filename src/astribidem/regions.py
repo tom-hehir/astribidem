@@ -28,10 +28,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from astro_crossmatch.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
-from astro_crossmatch.edges import EdgeSettings, dedupe_from_pairs
-from astro_crossmatch.graph import connected_components
-from astro_crossmatch.kernel import CatalogKernel, radec_to_xyz, resolve_workers
+from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
+from astribidem.edges import EdgeSettings, dedupe_from_pairs
+from astribidem.graph import connected_components
+from astribidem.kernel import CatalogKernel, radec_to_xyz, resolve_workers
 
 MARGIN_BELOW = -1
 OWNED = 0

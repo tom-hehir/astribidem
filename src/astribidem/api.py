@@ -9,10 +9,10 @@ from itertools import combinations
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from astro_crossmatch.candidate_edges import CandidateEdges
-from astro_crossmatch.edges import SurveyCoords, build_edges
-from astro_crossmatch.modes import CrossmatchModeConfig, mode_to_mapping
-from astro_crossmatch.uids import _as_arrow
+from astribidem.candidate_edges import CandidateEdges
+from astribidem.edges import SurveyCoords, build_edges
+from astribidem.modes import CrossmatchModeConfig, mode_to_mapping
+from astribidem.uids import _as_arrow
 
 
 def _required_pairs(
@@ -81,10 +81,10 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
         for survey in edges.surveys
     }
     metadata = dict(table.schema.metadata or {})
-    metadata[b"astro_crossmatch.resolved_config"] = json.dumps(
+    metadata[b"astribidem.resolved_config"] = json.dumps(
         provenance, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
-    metadata[b"astro_crossmatch.dedupe"] = json.dumps(
+    metadata[b"astribidem.dedupe"] = json.dumps(
         outcomes, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
     return table.replace_schema_metadata(metadata)

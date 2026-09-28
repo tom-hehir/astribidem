@@ -6,8 +6,8 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-from astro_crossmatch import match_uids as match_uid_rows
-from astro_crossmatch import rows_to_ids
+from astribidem import match_uids as match_uid_rows
+from astribidem import rows_to_ids
 
 
 def match_uids(uids, *, ids=None, **kwargs):
@@ -55,7 +55,7 @@ def test_three_source_joins_preserve_order_and_distinct_observation_ids(join, ex
     )
     assert result.to_pydict() == expected
     assert result["b/id"].type == pa.int16()
-    metadata = json.loads(result.schema.metadata[b"astro_crossmatch.resolved_config"])
+    metadata = json.loads(result.schema.metadata[b"astribidem.resolved_config"])
     assert metadata["method"] == "exact_uid"
     assert metadata["join"] == join
     assert metadata["anchor"] == "a"

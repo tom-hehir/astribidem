@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from astro_crossmatch.edges import (
+from astribidem.edges import (
     build_pair_edges,
     dedupe_survey,
     survey_coords_from_arrays,
