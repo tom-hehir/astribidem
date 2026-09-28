@@ -84,7 +84,13 @@ def float64_coordinates(
                 stacklevel=3,
             )
         converted.append(values.astype(np.float64, copy=False))
-    return converted[0], converted[1]
+    ra, dec = converted
+    where = f"survey {name!r}: " if name is not None else ""
+    if not (np.isfinite(ra).all() and np.isfinite(dec).all()):
+        raise ValueError(f"{where}coordinates must be finite")
+    if np.any((dec < -90.0) | (dec > 90.0)):
+        raise ValueError(f"{where}declination must be between -90 and 90 degrees")
+    return ra, dec
 
 
 def radec_to_xyz(
@@ -154,8 +160,13 @@ def _chunk_bounds(n: int, workers: int, chunk_rows: int | None) -> np.ndarray:
 class CatalogKernel:
     """One survey's match structure: unit vectors plus their KD-tree."""
 
-    def __init__(self, ra: np.ndarray, dec: np.ndarray) -> None:
-        self._init_from_xyz(radec_to_xyz(ra, dec))
+    def __init__(
+        self, ra: np.ndarray, dec: np.ndarray, *, name: str | None = None
+    ) -> None:
+        ra_shape, dec_shape = np.shape(ra), np.shape(dec)
+        if len(ra_shape) != 1 or len(dec_shape) != 1 or ra_shape != dec_shape:
+            raise ValueError("ra/dec must be aligned 1-D arrays")
+        self._init_from_xyz(radec_to_xyz(ra, dec, name=name))
 
     @classmethod
     def from_xyz(cls, xyz: np.ndarray) -> CatalogKernel:

@@ -15,29 +15,26 @@ from astribidem import (
     crossmatch,
     index_summary,
     rows_to_ids,
-    survey_coords_from_arrays,
 )
 
 
-def survey(name, offsets):
+def survey(offsets):
     offsets = np.asarray(offsets, dtype=float)
-    return survey_coords_from_arrays(name, 180 + offsets / 3600, np.zeros(len(offsets)))
+    return 180 + offsets / 3600, np.zeros(len(offsets))
 
 
 def resolve(surveys, *, mode=None, **kwargs):
     return crossmatch(
         surveys,
         radius_arcsec=kwargs.pop("radius_arcsec", 1.0),
-        dedupe_radius_arcsec=kwargs.pop(
-            "dedupe_radius_arcsec", {item.name: 0.0 for item in surveys}
-        ),
+        dedupe_radius_arcsec=kwargs.pop("dedupe_radius_arcsec", 0.0),
         mode=mode or EntitywiseCrossmatchConfig(),
         **kwargs,
     )
 
 
 def test_public_entity_index_emits_rows_nulls_and_round_trips_parquet(tmp_path):
-    sources = [survey("a", [0, 20]), survey("b", [0.2])]
+    sources = {"a": survey([0, 20]), "b": survey([0.2])}
     result = resolve(sources)
     assert result.schema.field("a/row_index").type == pa.int64()
     assert result.to_pylist() == [
@@ -50,8 +47,12 @@ def test_public_entity_index_emits_rows_nulls_and_round_trips_parquet(tmp_path):
 
 
 def test_public_dedupe_keeps_lowest_row_and_reports_outcome():
-    sources = [survey("a", [0.1, 0]), survey("b", [0.05])]
-    result = resolve(sources, dedupe_radius_arcsec={"a": 0.2, "b": 0})
+    sources = {"a": survey([0.1, 0]), "b": survey([0.05])}
+    result = resolve(
+        sources,
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0.2, "b": 0},
+    )
     assert result["a/row_index"].to_pylist() == [0]
     assert result["b/row_index"].to_pylist() == [0]
     outcomes = json.loads(result.schema.metadata[b"astribidem.dedupe"])
@@ -60,7 +61,7 @@ def test_public_dedupe_keeps_lowest_row_and_reports_outcome():
 
 def test_rows_to_ids_keeps_types_nulls_column_order_and_metadata():
     big = 2**60 + 7
-    result = resolve([survey("a", [0, 20]), survey("b", [0.2])])
+    result = resolve({"a": survey([0, 20]), "b": survey([0.2])})
     table = rows_to_ids(
         result,
         {"a": pa.array([big, big + 1], pa.uint64()), "b": ["b-0"]},
@@ -76,26 +77,22 @@ def test_rows_to_ids_keeps_types_nulls_column_order_and_metadata():
 
 
 def test_rows_to_ids_leaves_unnamed_surveys_as_rows():
-    result = resolve([survey("a", [0]), survey("b", [0.2])])
+    result = resolve({"a": survey([0]), "b": survey([0.2])})
     table = rows_to_ids(result, {"b": [42]})
     assert table.column_names == ["a/row_index", "b/id", "disputed_reason"]
 
 
 def test_pair_override_changes_dispute_classification():
-    sources = [survey("a", [0]), survey("b", [0.3]), survey("c", [0.6])]
+    sources = {"a": survey([0]), "b": survey([0.3]), "c": survey([0.6])}
     clean = resolve(sources)
     assert len(clean) == 1
-    disputed = resolve(sources, pair_radius_overrides={("a", "c"): 0.1})
+    disputed = resolve(sources, radius_arcsec_overrides={("a", "c"): 0.1})
     assert len(disputed) == 3
     assert disputed["disputed_reason"].to_pylist() == ["ambiguous_component"] * 3
 
 
 def test_selection_does_not_hide_optional_survey_ambiguity():
-    sources = [
-        survey("a", [0]),
-        survey("b", [0.2]),
-        survey("c", [0.3, 0.4]),
-    ]
+    sources = {"a": survey([0]), "b": survey([0.2]), "c": survey([0.3, 0.4])}
     mode = EntitywiseCrossmatchConfig(
         selection=EntitySelectionConfig(min_surveys=2, must_include_surveys=["a", "b"])
     )
@@ -103,7 +100,7 @@ def test_selection_does_not_hide_optional_survey_ambiguity():
 
 
 def test_subset_join_builds_only_selected_relations():
-    sources = [survey("a", [0]), survey("b", [0.2]), survey("c", [20])]
+    sources = {"a": survey([0]), "b": survey([0.2]), "c": survey([20])}
     result = resolve(sources, mode=DegenerateCrossmatchConfig(surveys=["a", "b"]))
     assert result.column_names == [
         "a/row_index",
@@ -114,7 +111,7 @@ def test_subset_join_builds_only_selected_relations():
 
 
 def test_empty_survey_is_valid_and_missing_members_stay_null():
-    sources = [survey("a", []), survey("b", [0])]
+    sources = {"a": survey([]), "b": survey([0])}
     result = resolve(sources)
     assert result.to_pylist() == [
         {"a/row_index": None, "b/row_index": 0, "disputed_reason": None}
@@ -126,7 +123,7 @@ def test_empty_survey_is_valid_and_missing_members_stay_null():
 )
 def test_dedupe_choice_is_explicit_and_valid(radii):
     with pytest.raises(ValueError, match="dedupe"):
-        resolve([survey("a", [0])], dedupe_radius_arcsec=radii)
+        resolve({"a": survey([0])}, dedupe_radius_arcsec=radii)
 
 
 @pytest.mark.parametrize(
@@ -139,14 +136,14 @@ def test_dedupe_choice_is_explicit_and_valid(radii):
     ],
 )
 def test_invalid_pair_override_is_rejected(override):
-    sources = [survey("a", [0]), survey("b", [0])]
+    sources = {"a": survey([0]), "b": survey([0])}
     with pytest.raises(ValueError, match="override"):
-        resolve(sources, pair_radius_overrides=override)
+        resolve(sources, radius_arcsec_overrides=override)
 
 
 def test_unknown_mode_survey_is_rejected_before_matching():
     with pytest.raises(ValueError, match="unknown surveys"):
-        resolve([survey("a", [0])], mode=DegenerateCrossmatchConfig(surveys=["a", "b"]))
+        resolve({"a": survey([0])}, mode=DegenerateCrossmatchConfig(surveys=["a", "b"]))
 
 
 def test_no_upstream_or_storage_dependencies_are_imported():
@@ -160,15 +157,15 @@ def test_no_upstream_or_storage_dependencies_are_imported():
 def test_low_precision_coordinates_warn_but_compute_in_float64(dtype):
     ra = np.array([180.0, 180.0001], dtype=dtype)
     with pytest.warns(UserWarning, match="16-bit|32-bit"):
-        coords = survey_coords_from_arrays("a", ra, np.zeros(2, dtype=np.float64))
-    assert coords.xyz.dtype == np.float64
+        result = resolve({"a": (ra, np.zeros(2, dtype=np.float64))})
+    assert result.num_rows == 2
 
 
 @pytest.mark.parametrize(
     "ra", [[180.0, 181.0], np.array([180, 181]), np.array([180.0, 181.0])]
 )
 def test_float64_integer_and_list_coordinates_do_not_warn(ra, recwarn):
-    survey_coords_from_arrays("a", ra, [0.0, 0.0])
+    resolve({"a": (ra, [0.0, 0.0])})
     assert not recwarn.list
 
 
@@ -186,7 +183,43 @@ def test_geometry_adapter_warns_on_low_precision_coordinates():
 
 
 def test_saved_index_keeps_its_summary(tmp_path):
-    result = resolve([survey("a", [0, 20]), survey("b", [0.2])])
+    result = resolve({"a": survey([0, 20]), "b": survey([0.2])})
     path = tmp_path / "index.parquet"
     pq.write_table(result, path)
     assert index_summary(pq.read_table(path)) == index_summary(result)
+
+
+@pytest.mark.parametrize(
+    "ra,dec,message",
+    [
+        ([0.0], [100.0], "declination"),
+        ([0.0], [-90.00001], "declination"),
+        ([float("nan")], [0.0], "finite"),
+        ([0.0], [float("inf")], "finite"),
+    ],
+)
+@pytest.mark.parametrize("entry", ["arrays", "geometry", "banded"])
+def test_invalid_coordinates_fail_at_every_array_entry(
+    tmp_path, ra, dec, message, entry
+):
+    from astribidem import write_band_layout
+    from astribidem.geometry import crossmatch_radec
+
+    with pytest.raises(ValueError, match=message):
+        if entry == "arrays":
+            resolve({"a": (ra, dec)})
+        elif entry == "geometry":
+            crossmatch_radec([(ra, dec), ([0.0], [0.0])], radius_arcsec=1.0)
+        else:
+            write_band_layout(tmp_path, {"a": [(ra, dec)]}, band_height_deg=1.0)
+
+
+def test_poles_and_wrapped_ra_remain_valid():
+    result = resolve(
+        {
+            "a": ([-1.0, 361.0], [-90.0, 90.0]),
+            "b": ([123.0, 456.0], [-90.0, 90.0]),
+        }
+    )
+    assert result["a/row_index"].to_pylist() == [0, 1]
+    assert result["b/row_index"].to_pylist() == [0, 1]

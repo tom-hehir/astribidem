@@ -13,13 +13,17 @@ later.
 
 ```python
 from astribidem import (
-    DegenerateCrossmatchConfig, EntitywiseCrossmatchConfig, build_edges, resolve,
+    DegenerateCrossmatchConfig,
+    EntitywiseCrossmatchConfig,
+    build_edges,
+    resolve,
 )
 
 edges = build_edges(
     surveys,
     radius_arcsec=1.0,
-    dedupe_radius_arcsec={"a": 0.5, "b": 0.0, "c": 0.0},
+    dedupe_radius_arcsec=0.0,
+    dedupe_radius_arcsec_overrides={"a": 0.5, "b": 0.0, "c": 0.0},
 )
 entities = resolve(edges, EntitywiseCrossmatchConfig())
 pairs = resolve(edges, DegenerateCrossmatchConfig(surveys=["a", "b"]))
@@ -87,7 +91,8 @@ build_edges_to_directory(
     surveys,
     "edges-directory",
     radius_arcsec=1.0,
-    dedupe_radius_arcsec={"a": 0.5, "b": 0.0, "c": 0.0},
+    dedupe_radius_arcsec=0.0,
+    dedupe_radius_arcsec_overrides={"a": 0.5, "b": 0.0, "c": 0.0},
     workers=4,
     chunk_rows=1_000_000,
 )
@@ -100,8 +105,11 @@ chunk covers `chunk_rows` rows of the first survey in a pair, and at most
 worker, which holds a pair's complete edge set at once, so set `chunk_rows` when
 edge memory is the limit. Very small chunks can slow the build.
 
-Streaming bounds only the edges. Every survey's coordinates, KD-tree and dedupe
-results stay in memory for the whole build, at roughly 50 bytes per row.
+Streaming bounds only the edges. Every survey's XYZ, KD-tree and dedupe
+results stay in memory for the build. Caller-retained RA/Dec arrays also
+consume memory; the library drops its input references after preparing kernels.
+Float64 XYZ occupies 24 bytes per row, in addition to tree structures,
+dedupe state, candidate buffers and conversion temporaries.
 Resolution later loads all edges of the surveys it uses, but no coordinates.
 
 ## Build edges band by band
@@ -116,14 +124,15 @@ from astribidem.banded import as_chunks
 
 write_band_layout(
     "layout-directory",
-    {"a": chunks_a, "b": chunks_b},   # iterables of (ra, dec) chunks, in row order
+    {"a": chunks_a, "b": chunks_b},  # iterables of (ra, dec) chunks, in row order
     band_height_deg=0.1,
 )
 build_edges_by_band(
     "layout-directory",
     "edges-directory",
     radius_arcsec=1.0,
-    dedupe_radius_arcsec={"a": 0.5, "b": 0.0},
+    dedupe_radius_arcsec=0.0,
+    dedupe_radius_arcsec_overrides={"a": 0.5, "b": 0.0},
 )
 ```
 
@@ -201,4 +210,3 @@ A growing largest component warns that the radius is close to percolation. A
 clean component spanning surveys A and B is one row of a clean A x B product,
 so the combination counts size subset joins before building them. The census
 omits pairs that were not built; `all_pairs_built` is false in that case.
-

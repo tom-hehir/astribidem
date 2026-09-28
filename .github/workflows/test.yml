@@ -1,0 +1,53 @@
+name: Test
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Check base and large installations without test dependencies
+        run: |
+          wheel=(dist/*.whl)
+          for extra in base large; do
+            environment=".smoke-$extra"
+            uv venv "$environment"
+            requirement="${wheel[0]}"
+            if [[ "$extra" == large ]]; then requirement+="[large]"; fi
+            uv pip install --python "$environment" "$requirement"
+            uv run --no-project --python "$environment" python scripts/smoke_install.py "$extra"
+          done
+      - name: Install the built wheel in an isolated environment
+        run: |
+          uv venv .ci-venv
+          wheel=(dist/*.whl)
+          uv pip install --python .ci-venv "${wheel[0]}[test]" coverage
+          uv run --no-project --python .ci-venv python -c "import astribidem; assert 'site-packages' in astribidem.__file__, astribidem.__file__"
+      - name: Run tests against the installed wheel
+        run: uv run --no-project --python .ci-venv coverage run -m pytest --durations=15 --durations-min=1
+      - name: Report coverage
+        if: ${{ always() && hashFiles('.coverage') != '' }}
+        run: |
+          uv run --no-project --python .ci-venv coverage xml
+          uv run --no-project --python .ci-venv coverage report
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: ${{ always() && hashFiles('coverage.xml') != '' }}
+        with:
+          name: coverage
+          path: coverage.xml

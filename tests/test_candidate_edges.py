@@ -15,27 +15,27 @@ from astribidem import (
     crossmatch,
     read_edges,
     resolve,
-    survey_coords_from_arrays,
     write_edges,
 )
 from astribidem import kernel as kernel_module
 
 
-def survey(name, offsets_arcsec):
+def survey(offsets_arcsec):
     offsets = np.asarray(offsets_arcsec, dtype=float)
-    return survey_coords_from_arrays(name, 180 + offsets / 3600, np.zeros(len(offsets)))
+    return 180 + offsets / 3600, np.zeros(len(offsets))
 
 
 # Survey a: rows 0-2 are three copies, rows 3-5 a dedupe chain, row 6 alone.
-SURVEYS = [
-    survey("a", [0.0, 0.1, 0.2, 10.0, 10.4, 10.8, 20.0]),
-    survey("b", [0.3, 10.6, 20.2, 30.0]),
-    survey("c", [0.25, 20.1]),
-]
+SURVEYS = {
+    "a": survey([0.0, 0.1, 0.2, 10.0, 10.4, 10.8, 20.0]),
+    "b": survey([0.3, 10.6, 20.2, 30.0]),
+    "c": survey([0.25, 20.1]),
+}
 SETTINGS = {
     "radius_arcsec": 1.0,
-    "dedupe_radius_arcsec": {"a": 0.5, "b": 0.0, "c": 0.0},
-    "pair_radius_overrides": {("a", "c"): 0.8},
+    "dedupe_radius_arcsec": 0.0,
+    "dedupe_radius_arcsec_overrides": {"a": 0.5, "b": 0.0, "c": 0.0},
+    "radius_arcsec_overrides": {("a", "c"): 0.8},
 }
 
 
@@ -74,7 +74,12 @@ def test_resolving_built_edges_equals_crossmatch():
 
 def test_saved_files_hold_rows_dedupe_outcomes_and_settings(tmp_path):
     write_edges(build_edges(SURVEYS, **SETTINGS), tmp_path)
+    from astribidem import __version__
+
     assert json.loads((tmp_path / "metadata.json").read_text()) == {
+        "format": "astribidem.edges",
+        "format_version": 1,
+        "astribidem_version": __version__,
         "surveys": [
             {"name": "a", "n_rows": 7, "dedupe_radius_arcsec": 0.5},
             {"name": "b", "n_rows": 4, "dedupe_radius_arcsec": 0.0},
@@ -167,15 +172,16 @@ def test_chunk_stream_keeps_at_most_workers_chunks_in_flight(monkeypatch):
 
 
 def test_writers_refuse_colliding_pair_file_names(tmp_path):
-    surveys = [
-        survey("a__b", [0]),
-        survey("c", [0]),
-        survey("a", [0]),
-        survey("b__c", [0]),
-    ]
+    surveys = {
+        "a__b": survey([0]),
+        "c": survey([0]),
+        "a": survey([0]),
+        "b__c": survey([0]),
+    }
     settings = {
         "radius_arcsec": 1.0,
-        "dedupe_radius_arcsec": {item.name: 0.0 for item in surveys},
+        "dedupe_radius_arcsec": 0.0,
+        "dedupe_radius_arcsec_overrides": {name: 0.0 for name in surveys},
     }
     with pytest.raises(ValueError, match="share an edge file name"):
         write_edges(build_edges(surveys, **settings), tmp_path)
@@ -217,11 +223,11 @@ def restrict(edges, rows_by_survey):
 
 
 # Two sky patches 1 degree apart: rows of each patch form separate segments.
-PATCHES = [
-    survey("a", [0.0, 0.1, 0.2, 10.0, 10.4, 10.8, 3600.0, 3600.1, 3610.0]),
-    survey("b", [0.3, 10.6, 3600.2, 3610.6, 3630.0]),
-    survey("c", [0.25, 3600.15]),
-]
+PATCHES = {
+    "a": survey([0.0, 0.1, 0.2, 10.0, 10.4, 10.8, 3600.0, 3600.1, 3610.0]),
+    "b": survey([0.3, 10.6, 3600.2, 3610.6, 3630.0]),
+    "c": survey([0.25, 3600.15]),
+}
 PATCH_ROWS = [
     {"a": [0, 1, 2, 3, 4, 5], "b": [0, 1], "c": [0]},
     {"a": [6, 7, 8], "b": [2, 3, 4], "c": [1]},

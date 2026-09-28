@@ -25,7 +25,6 @@ from astribidem import (
     crossmatch,
     read_edges,
     resolve,
-    survey_coords_from_arrays,
     write_edges,
 )
 from astribidem.banded import as_chunks, build_edges_by_band, write_band_layout
@@ -33,7 +32,7 @@ from astribidem.modes import entity_order
 
 FIXTURES = Path(__file__).with_name("fixtures")
 sys.path.insert(0, str(FIXTURES))
-from aion_parity_cases import (
+from aion_parity_cases import (  # noqa: E402 — fixture path is set above
     CASES,
     DEDUPE_RADIUS_ARCSEC,
     PAIR_RADIUS_OVERRIDE,
@@ -67,18 +66,17 @@ def mode(kind, arguments):
 
 @pytest.fixture(scope="module")
 def surveys():
-    return [
-        survey_coords_from_arrays(
-            name, EXPECTED[f"input/{name}/ra"], EXPECTED[f"input/{name}/dec"]
-        )
+    return {
+        name: (EXPECTED[f"input/{name}/ra"], EXPECTED[f"input/{name}/dec"])
         for name in SURVEYS
-    ]
+    }
 
 
 SETTINGS = {
     "radius_arcsec": RADIUS_ARCSEC,
-    "dedupe_radius_arcsec": DEDUPE_RADIUS_ARCSEC,
-    "pair_radius_overrides": {PAIR_RADIUS_OVERRIDE[0]: PAIR_RADIUS_OVERRIDE[1]},
+    "dedupe_radius_arcsec": 0.0,
+    "dedupe_radius_arcsec_overrides": DEDUPE_RADIUS_ARCSEC,
+    "radius_arcsec_overrides": {PAIR_RADIUS_OVERRIDE[0]: PAIR_RADIUS_OVERRIDE[1]},
 }
 
 

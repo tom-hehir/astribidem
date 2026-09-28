@@ -10,13 +10,13 @@ in degrees (matching the public crossmatch API).
 
 from __future__ import annotations
 
-from typing import List, Sequence, Tuple
+from collections.abc import Sequence
 
 import numpy as np
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 
-CoordPair = Tuple[np.ndarray, np.ndarray]
+CoordPair = tuple[np.ndarray, np.ndarray]
 
 
 def _to_skycoord(ra_deg: np.ndarray, dec_deg: np.ndarray) -> SkyCoord:
@@ -39,8 +39,8 @@ def one_way(coords: Sequence[CoordPair], radius_arcsec: float) -> np.ndarray:
     if n_query == 0:
         return np.empty((len(coords), 0), dtype=int)
 
-    columns: List[np.ndarray] = [np.arange(n_query, dtype=int)]
-    masks: List[np.ndarray] = []
+    columns: list[np.ndarray] = [np.arange(n_query, dtype=int)]
+    masks: list[np.ndarray] = []
     for ra, dec in coords[1:]:
         if len(ra) == 0:
             return np.empty((len(coords), 0), dtype=int)
@@ -64,7 +64,7 @@ def _one_way_anchored_at(
 
     Returns indices in canonical column order (column ``j`` = catalog ``j``).
     """
-    rotated: List[CoordPair] = [coords[anchor]] + [
+    rotated: list[CoordPair] = [coords[anchor]] + [
         coords[j] for j in range(len(coords)) if j != anchor
     ]
     rotated_groups = one_way(rotated, radius_arcsec)
@@ -93,7 +93,7 @@ def reciprocal(coords: Sequence[CoordPair], radius_arcsec: float) -> np.ndarray:
         return np.arange(len(coords[0][0]), dtype=int).reshape(1, -1)
 
     # Compute groups anchored at every catalog and intersect them.
-    per_anchor: List[set] = []
+    per_anchor: list[set] = []
     for anchor in range(len(coords)):
         groups = _one_way_anchored_at(coords, anchor, radius_arcsec)
         per_anchor.append(
@@ -111,7 +111,7 @@ def reciprocal(coords: Sequence[CoordPair], radius_arcsec: float) -> np.ndarray:
 
 def primary_collisions(
     coords: Sequence[CoordPair], radius_arcsec: float
-) -> List[np.ndarray]:
+) -> list[np.ndarray]:
     """Reference for ``detect_primary_collisions``.
 
     Returns one boolean mask per catalog. The mask for ``coords[0]`` is True
@@ -140,7 +140,7 @@ def primary_collisions(
 
 def all_collisions(
     coords: Sequence[CoordPair], radius_arcsec: float
-) -> List[np.ndarray]:
+) -> list[np.ndarray]:
     """Reference for ``detect_collisions``.
 
     Returns one boolean mask per catalog. ``masks[i][r]`` is True iff

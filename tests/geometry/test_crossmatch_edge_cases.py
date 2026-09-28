@@ -11,6 +11,8 @@ import pytest
 
 from astribidem.geometry import (
     crossmatch_radec as crossmatch,
+)
+from astribidem.geometry import (
     detect_collisions,
 )
 

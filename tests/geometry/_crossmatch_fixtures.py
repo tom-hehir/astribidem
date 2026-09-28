@@ -6,11 +6,9 @@ shared across the correctness, N-way, and edge-case test files.
 
 from __future__ import annotations
 
-from typing import Tuple
-
 import numpy as np
 
-CoordPair = Tuple[np.ndarray, np.ndarray]
+CoordPair = tuple[np.ndarray, np.ndarray]
 
 
 REGIMES = ("equator", "mid_latitude", "near_pole", "full_sphere")
@@ -61,7 +59,7 @@ def make_overlapping_catalogs(
     overlap_fraction: float = 0.7,
     offset_arcsec: float = 0.3,
     seed: int = 0,
-) -> Tuple[CoordPair, ...]:
+) -> tuple[CoordPair, ...]:
     """Build ``n_catalogs`` catalogs sharing a partial common population.
 
     A "common" subset of size ``int(overlap_fraction * n_per_catalog)`` is
@@ -97,7 +95,7 @@ def make_overlapping_catalogs(
 
 def make_disjoint_catalogs(
     regime: str, n_per_catalog: int = 50, n_catalogs: int = 2, seed: int = 0
-) -> Tuple[CoordPair, ...]:
+) -> tuple[CoordPair, ...]:
     """Catalogs drawn independently from the regime; matches are accidental only."""
     rng = np.random.default_rng(seed)
     return tuple(_sample_regime(rng, n_per_catalog, regime) for _ in range(n_catalogs))

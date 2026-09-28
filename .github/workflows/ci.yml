@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release-tag:
+        description: Optional release tag; must equal v plus the package version
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+jobs:
+  pre-commit:
+    uses: ./.github/workflows/pre-commit.yml
+
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      release-tag: ${{ inputs.release-tag || '' }}
+
+  test:
+    needs: build
+    uses: ./.github/workflows/test.yml

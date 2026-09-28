@@ -15,7 +15,6 @@ from astribidem import (
     read_segment,
     resolve,
     segment_names,
-    survey_coords_from_arrays,
 )
 from astribidem.banded import (
     as_chunks,
@@ -29,7 +28,7 @@ from astribidem.banded import (
 
 FIXTURES = Path(__file__).with_name("fixtures")
 sys.path.insert(0, str(FIXTURES))
-from aion_parity_cases import (
+from aion_parity_cases import (  # noqa: E402 — fixture path is set above
     DEDUPE_RADIUS_ARCSEC,
     PAIR_RADIUS_OVERRIDE,
     RADIUS_ARCSEC,
@@ -44,16 +43,14 @@ CATALOGS = {
 }
 SETTINGS = {
     "radius_arcsec": RADIUS_ARCSEC,
-    "dedupe_radius_arcsec": DEDUPE_RADIUS_ARCSEC,
-    "pair_radius_overrides": {PAIR_RADIUS_OVERRIDE[0]: PAIR_RADIUS_OVERRIDE[1]},
+    "dedupe_radius_arcsec": 0.0,
+    "dedupe_radius_arcsec_overrides": DEDUPE_RADIUS_ARCSEC,
+    "radius_arcsec_overrides": {PAIR_RADIUS_OVERRIDE[0]: PAIR_RADIUS_OVERRIDE[1]},
 }
 
 
 def in_memory(catalogs, **settings):
-    return build_edges(
-        [survey_coords_from_arrays(n, ra, dec) for n, (ra, dec) in catalogs.items()],
-        **settings,
-    )
+    return build_edges(catalogs, **settings)
 
 
 def layout(tmp_path, catalogs, band_height_arcsec, chunk_rows=700):
@@ -154,16 +151,23 @@ def test_sweep_fails_loudly_when_groups_span_many_bands(tmp_path):
             directory,
             tmp_path / "edges",
             radius_arcsec=1.0,
-            dedupe_radius_arcsec={"a": 1.0},
+            dedupe_radius_arcsec=0.0,
+            dedupe_radius_arcsec_overrides={"a": 1.0},
             max_carried_rows=20,
         )
     build_edges_by_band(
         directory,
         tmp_path / "unbounded",
         radius_arcsec=1.0,
-        dedupe_radius_arcsec={"a": 1.0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 1.0},
     )
     assert_same_edges(
         read_edges(tmp_path / "unbounded"),
-        in_memory(catalogs, radius_arcsec=1.0, dedupe_radius_arcsec={"a": 1.0}),
+        in_memory(
+            catalogs,
+            radius_arcsec=1.0,
+            dedupe_radius_arcsec=0.0,
+            dedupe_radius_arcsec_overrides={"a": 1.0},
+        ),
     )

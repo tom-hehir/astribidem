@@ -13,7 +13,6 @@ from astribidem import (
     build_edges,
     combine_segments,
     resolve,
-    survey_coords_from_arrays,
 )
 from astribidem.edges import edge_settings
 from astribidem.regions import (
@@ -28,7 +27,7 @@ from astribidem.regions import (
 
 FIXTURES = Path(__file__).with_name("fixtures")
 sys.path.insert(0, str(FIXTURES))
-from aion_parity_cases import (
+from aion_parity_cases import (  # noqa: E402 — fixture path is set above
     DEDUPE_RADIUS_ARCSEC,
     PAIR_RADIUS_OVERRIDE,
     RADIUS_ARCSEC,
@@ -100,16 +99,14 @@ PARITY_CATALOGS = {
 }
 PARITY_SETTINGS = {
     "radius_arcsec": RADIUS_ARCSEC,
-    "dedupe_radius_arcsec": DEDUPE_RADIUS_ARCSEC,
-    "pair_radius_overrides": {PAIR_RADIUS_OVERRIDE[0]: PAIR_RADIUS_OVERRIDE[1]},
+    "dedupe_radius_arcsec": 0.0,
+    "dedupe_radius_arcsec_overrides": DEDUPE_RADIUS_ARCSEC,
+    "radius_arcsec_overrides": {PAIR_RADIUS_OVERRIDE[0]: PAIR_RADIUS_OVERRIDE[1]},
 }
 
 
 def in_memory(catalogs, **settings):
-    surveys = [
-        survey_coords_from_arrays(name, ra, dec) for name, (ra, dec) in catalogs.items()
-    ]
-    return build_edges(surveys, **settings)
+    return build_edges(catalogs, **settings)
 
 
 @pytest.mark.parametrize("band_height_arcsec", [1.0, 3.0, 20.0, 330.0])
@@ -154,7 +151,8 @@ def test_random_crowded_catalogs_with_chains_across_bands(seed):
         catalogs[name] = (ra, dec)
     settings = {
         "radius_arcsec": 1.0,
-        "dedupe_radius_arcsec": {"x": 0.6, "y": 0.0},
+        "dedupe_radius_arcsec": 0.0,
+        "dedupe_radius_arcsec_overrides": {"x": 0.6, "y": 0.0},
     }
     for band_height in (1.0, 2.5, 7.0):
         combined, _, _ = banded_edges(catalogs, band_height * ARCSEC, **settings)
@@ -168,7 +166,11 @@ def test_a_chain_spanning_three_bands_is_finished_by_the_handover():
         "a": (np.full(3, 10.0), np.array([0.05, 2, 4]) * step),
         "b": (np.full(2, 10.0), np.array([1, 3]) * step),
     }
-    settings = {"radius_arcsec": 1.0, "dedupe_radius_arcsec": {"a": 0.0, "b": 0.0}}
+    settings = {
+        "radius_arcsec": 1.0,
+        "dedupe_radius_arcsec": 0.0,
+        "dedupe_radius_arcsec_overrides": {"a": 0.0, "b": 0.0},
+    }
     combined, segments, boundary = banded_edges(catalogs, 1.0 * ARCSEC, **settings)
     assert_same_edges(combined, in_memory(catalogs, **settings))
     assert all(len(s.pairs[frozenset("ab")].row_a) == 0 for s in segments)

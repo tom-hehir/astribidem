@@ -8,26 +8,26 @@ from astribidem import (
     audit_edges,
     build_edges,
     read_edges,
-    survey_coords_from_arrays,
     write_edges,
 )
 
 
-def survey(name, offsets_arcsec):
+def survey(offsets_arcsec):
     offsets = np.asarray(offsets_arcsec, dtype=float)
-    return survey_coords_from_arrays(name, 180 + offsets / 3600, np.zeros(len(offsets)))
+    return 180 + offsets / 3600, np.zeros(len(offsets))
 
 
 # Survey a: rows 0-2 are three copies, rows 3-5 a dedupe chain, row 6 alone.
-SURVEYS = [
-    survey("a", [0.0, 0.1, 0.2, 10.0, 10.4, 10.8, 20.0]),
-    survey("b", [0.3, 10.6, 20.2, 30.0]),
-    survey("c", [0.25, 20.1]),
-]
+SURVEYS = {
+    "a": survey([0.0, 0.1, 0.2, 10.0, 10.4, 10.8, 20.0]),
+    "b": survey([0.3, 10.6, 20.2, 30.0]),
+    "c": survey([0.25, 20.1]),
+}
 SETTINGS = {
     "radius_arcsec": 1.0,
-    "dedupe_radius_arcsec": {"a": 0.5, "b": 0.0, "c": 0.0},
-    "pair_radius_overrides": {("a", "c"): 0.8},
+    "dedupe_radius_arcsec": 0.0,
+    "dedupe_radius_arcsec_overrides": {"a": 0.5, "b": 0.0, "c": 0.0},
+    "radius_arcsec_overrides": {("a", "c"): 0.8},
 }
 
 
@@ -61,9 +61,10 @@ def test_audit_reports_dedupe_groups_pairs_and_clean_components():
 
 def test_audit_counts_contested_rows_and_ambiguous_components():
     edges = build_edges(
-        [survey("x", [0.0]), survey("y", [0.2, 0.4])],
+        {"x": survey([0.0]), "y": survey([0.2, 0.4])},
         radius_arcsec=1.0,
-        dedupe_radius_arcsec={"x": 0.0, "y": 0.0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"x": 0.0, "y": 0.0},
     )
     audit = audit_edges(edges)
     assert audit["pairs"][0]["multi_candidate_rows"] == {"x": 1, "y": 0}
@@ -91,9 +92,10 @@ def test_audit_flags_restricted_pair_builds():
 
 def test_audit_of_empty_surveys():
     edges = build_edges(
-        [survey("x", []), survey("y", [])],
+        {"x": survey([]), "y": survey([])},
         radius_arcsec=1.0,
-        dedupe_radius_arcsec={"x": 0.0, "y": 0.0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"x": 0.0, "y": 0.0},
     )
     audit = audit_edges(edges)
     assert audit["components"] == {"n_rows": 0, "n_components": 0}

@@ -1,4 +1,4 @@
-# Provenance
+# Development provenance
 
 The initial extraction preserves the MIT notice, Copyright (c) 2026 Tom Hehir.
 
@@ -25,3 +25,16 @@ Spatial indexes now carry row positions, with IDs mapped afterwards by
 which is AION-2's rule, instead of Astral's lowest stable ID.
 `tests/test_aion_parity.py` compares the matching core with indexes recorded
 from AION-2; `tests/fixtures/generate_aion_parity.py` records them.
+
+## Name
+
+The name joins Latin *astrum* ("star") and *ibidem* ("in the same place").
+In footnotes, *ibid.* means "the same source as before"; a crossmatch decides
+whether two catalogue rows are the same astronomical source.
+
+## Initial release preparation
+
+At the preparation of `0.0.0a0`, the source repository was private. Public
+documentation and issue-tracker links were still a launch task. Publishing the
+downstream `astribidem-hf` package also requires replacing its private Git
+dependency with a compatible released astribidem version.

@@ -1,11 +1,16 @@
-# UID matching benchmark
+# Matching benchmarks
 
-The [UID implementation decision](../docs/uid-matching.md) records a separate
+For spatial matching, see the [in-memory versus banded benchmark](spatial.md),
+which records time and peak memory and verifies identical output indexes.
+
+## UID matching benchmark
+
+The [UID implementation decision](../notes/uid-matching-implementation.md) records a separate
 comparison of canonical Arrow, NumPy, pandas and Polars approaches, including
 threading and native-string requirements. Arrow remains the chosen dependency;
 the measurements below describe the earlier Python-object-to-Arrow update.
 
-The [direct Acero evaluation](../docs/uid-acero-evaluation.md) preserves a
+The [direct Acero evaluation](../notes/uid-acero-evaluation.md) preserves a
 reproducible two-source comparison of the production matcher, optimized
 `index_in`, `Table.join`, and row-position-only Acero joins at 500k and 2m
 rows/source. Run `benchmark_uid_acero.py` using the commands in that report.

@@ -35,10 +35,10 @@ intentionally not being added to AION-2.
 
 ## Current APIs are different
 
-- [`match_uids`](../uid-matching.md) already supports N-source inner, left and
+- [`match_uids`](../../docs/uid-matching.md) already supports N-source inner, left and
   outer joins of exact integer or string keys. It requires unique, non-null keys
   and preserves separate typed source-observation IDs.
-- [`match_hub_and_spoke`](../hub-and-spoke-matching.md) composes independent
+- [`match_hub_and_spoke`](../../docs/hub-and-spoke-matching.md) composes independent
   links through one explicit anchor. Each link can be UID or spatial, including
   all-UID and all-spatial configurations. Every link sees its full input
   catalogs; results are combined by inner intersection. It does not construct

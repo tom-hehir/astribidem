@@ -1,6 +1,6 @@
 """Build candidate edges for catalogs larger than memory, band by band.
 
-The build runs in three steps (see ``docs/design/banded-edge-builds.md``):
+The build runs in three steps (see ``notes/design/banded-edge-builds.md``):
 
 1. ``write_band_layout`` streams each survey's coordinates once and writes
    ``(row, ra, dec)`` grouped by declination band.
@@ -35,6 +35,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from astribidem._formats import check_file_metadata, file_metadata
 from astribidem.candidate_edges import DedupeOutcome
 from astribidem.edge_files import write_metadata, write_segment
 from astribidem.edges import EdgeSettings, edge_settings
@@ -138,13 +139,19 @@ def write_band_layout(
             survey_directory / "index.parquet",
         )
         entries.append({"name": name, "n_rows": offset})
-    layout = {"band_height_deg": band_height_deg, "surveys": entries}
+    layout = {
+        **file_metadata("band_layout"),
+        "band_height_deg": band_height_deg,
+        "surveys": entries,
+    }
     (directory / "layout.json").write_text(json.dumps(layout, indent=2) + "\n")
 
 
 def read_layout(directory: str | Path) -> dict:
     """The contents of a layout directory's ``layout.json``."""
-    return json.loads((Path(directory) / "layout.json").read_text())
+    layout = json.loads((Path(directory) / "layout.json").read_text())
+    check_file_metadata(layout, "band_layout")
+    return layout
 
 
 def _read_bands(directory: Path, survey: str, bands: Sequence[int]):
@@ -177,8 +184,9 @@ def prepare_band_build(
     edges_directory: str | Path,
     *,
     radius_arcsec: float,
-    dedupe_radius_arcsec: Mapping[str, float],
-    pair_radius_overrides: Mapping[tuple[str, str] | frozenset[str], float]
+    dedupe_radius_arcsec: float,
+    dedupe_radius_arcsec_overrides: Mapping[str, float] | None = None,
+    radius_arcsec_overrides: Mapping[tuple[str, str] | frozenset[str], float]
     | None = None,
     pairs: Iterable[tuple[str, str]] | None = None,
 ) -> list[int]:
@@ -194,7 +202,8 @@ def prepare_band_build(
         {entry["name"]: entry["n_rows"] for entry in layout["surveys"]},
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
-        pair_radius_overrides=pair_radius_overrides,
+        dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
+        radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
     )
     band_height_arcsec = layout["band_height_deg"] * _ARCSEC_PER_DEGREE
@@ -214,6 +223,7 @@ def prepare_band_build(
     )
     edges_directory.mkdir(parents=True, exist_ok=True)
     plan = {
+        **file_metadata("band_build"),
         "layout": str(layout_directory.resolve()),
         "band_height_deg": layout["band_height_deg"],
         "bands": bands,
@@ -231,6 +241,7 @@ def prepare_band_build(
 
 def _read_plan(edges_directory: Path) -> tuple[dict, EdgeSettings]:
     plan = json.loads((edges_directory / _PLAN).read_text())
+    check_file_metadata(plan, "band_build")
     settings = EdgeSettings(
         survey_names=tuple(plan["surveys"]),
         n_rows={name: int(n) for name, n in plan["n_rows"].items()},
@@ -509,8 +520,9 @@ def build_edges_by_band(
     edges_directory: str | Path,
     *,
     radius_arcsec: float,
-    dedupe_radius_arcsec: Mapping[str, float],
-    pair_radius_overrides: Mapping[tuple[str, str] | frozenset[str], float]
+    dedupe_radius_arcsec: float,
+    dedupe_radius_arcsec_overrides: Mapping[str, float] | None = None,
+    radius_arcsec_overrides: Mapping[tuple[str, str] | frozenset[str], float]
     | None = None,
     pairs: Iterable[tuple[str, str]] | None = None,
     workers: int = 1,
@@ -528,7 +540,8 @@ def build_edges_by_band(
         edges_directory,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
-        pair_radius_overrides=pair_radius_overrides,
+        dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
+        radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
     )
     tasks = [(str(edges_directory), band, workers) for band in bands]

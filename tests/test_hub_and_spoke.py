@@ -38,7 +38,8 @@ def test_uid_link_ignores_closer_spatial_neighbor_and_uses_distinct_ids():
         },
         anchor="a",
         links={"uid": UIDLink(), "sky": SpatialLink(1)},
-        dedupe_radius_arcsec={"a": 0, "sky": 0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0, "sky": 0},
     )
     assert result.to_pydict() == {
         "entity_id": [0],
@@ -64,7 +65,8 @@ def test_four_sources_intersect_links_in_anchor_order_and_keep_column_order(
         tables,
         anchor="anchor",
         links={"last": UIDLink(), "sky": SpatialLink(1), "uid": UIDLink()},
-        dedupe_radius_arcsec={"anchor": 0, "sky": 0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"anchor": 0, "sky": 0},
     )
     assert result.column_names == ["entity_id", *(f"{name}/id" for name in tables)]
     assert result.to_pydict() == {
@@ -97,7 +99,8 @@ def test_earlier_uid_filter_does_not_remove_full_input_spatial_competitor(uid_fi
         tables,
         anchor="a",
         links={"uid": UIDLink(), "sky": SpatialLink(1)},
-        dedupe_radius_arcsec={"a": 0, "sky": 0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0, "sky": 0},
     )
     assert result.num_rows == 0
     metadata = json.loads(result.schema.metadata[b"astribidem.resolved_config"])
@@ -115,7 +118,8 @@ def test_uid_eligibility_does_not_change_full_anchor_dedupe_keeper():
         },
         anchor="a",
         links={"uid": UIDLink(), "sky": SpatialLink(1)},
-        dedupe_radius_arcsec={"a": 0.2, "sky": 0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0.2, "sky": 0},
     )
     assert result.num_rows == 0
     metadata = json.loads(result.schema.metadata[b"astribidem.resolved_config"])
@@ -144,7 +148,8 @@ def test_empty_uid_link_does_not_skip_validation_of_other_full_inputs(invalid):
             },
             anchor="a",
             links=links,
-            dedupe_radius_arcsec=radii,
+            dedupe_radius_arcsec=0.0,
+            dedupe_radius_arcsec_overrides=radii,
         )
 
 
@@ -169,7 +174,8 @@ def test_spatial_dedupe_keeps_first_row_and_original_arrow_type(id_type, values)
         },
         anchor="a",
         links={"uid": UIDLink(), "sky": SpatialLink(1)},
-        dedupe_radius_arcsec={"a": 0.2, "sky": 0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0.2, "sky": 0},
     )
     assert result["a/id"].type == id_type
     assert result["a/id"].to_pylist() == [values[0]]
@@ -188,7 +194,8 @@ def test_uid_links_compare_full_unsigned_range_exactly_and_default_to_id():
         },
         anchor="a",
         links={"b": UIDLink(), "c": UIDLink()},
-        dedupe_radius_arcsec={},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={},
     )
     assert result.to_pydict() == {
         "entity_id": [0],
@@ -206,7 +213,8 @@ def test_anchored_spatial_policy_can_repeat_counterpart_observation():
         {"a": catalog([2, 1], offsets=[0, 0.2]), "b": catalog([30], offsets=[0.1])},
         anchor="a",
         links={"b": SpatialLink(1, "anchored_nearest")},
-        dedupe_radius_arcsec={"a": 0, "b": 0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0, "b": 0},
     )
     assert result.to_pydict() == {"entity_id": [0, 1], "a/id": [2, 1], "b/id": [30, 30]}
 
@@ -220,7 +228,8 @@ def test_counterparts_do_not_need_to_spatially_match_each_other():
         },
         anchor="a",
         links={"b": SpatialLink(1), "c": SpatialLink(1)},
-        dedupe_radius_arcsec={"a": 0, "b": 0, "c": 0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0, "b": 0, "c": 0},
     )
     assert result.num_rows == 1
 
@@ -249,13 +258,21 @@ def test_link_configurations_are_frozen():
         ({"links": {}}, "links"),
         ({"links": {"a": UIDLink(), "b": UIDLink()}}, "links"),
         ({"links": {"b": object()}}, "configurations"),
-        ({"dedupe_radius_arcsec": {"a": 0}}, "spatial participants"),
+        (
+            {"dedupe_radius_arcsec": 0.0, "dedupe_radius_arcsec_overrides": {"a": 0}},
+            "spatial participant",
+        ),
         ({"workers": True}, "workers"),
         ({"workers": 0}, "workers"),
     ],
 )
 def test_invalid_composition_configuration(kwargs, message):
-    settings = {"anchor": "a", "links": {"b": UIDLink()}, "dedupe_radius_arcsec": {}}
+    settings = {
+        "anchor": "a",
+        "links": {"b": UIDLink()},
+        "dedupe_radius_arcsec": 0.0,
+        "dedupe_radius_arcsec_overrides": {},
+    }
     settings.update(kwargs)
     with pytest.raises((ValueError, TypeError), match=message):
         match_hub_and_spoke({"a": catalog([1]), "b": catalog([1])}, **settings)
@@ -292,7 +309,8 @@ def test_empty_spatial_inputs_keep_original_id_types(empty_name):
         tables,
         anchor="a",
         links={"b": SpatialLink(1)},
-        dedupe_radius_arcsec={"a": 0, "b": 0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0, "b": 0},
     )
     assert result.num_rows == 0
     assert result["a/id"].type == pa.large_string()
@@ -312,7 +330,8 @@ def test_low_precision_catalog_coordinates_warn():
             {"a": table, "b": catalog([2], offsets=[0.1])},
             anchor="a",
             links={"b": SpatialLink(1)},
-            dedupe_radius_arcsec={"a": 0, "b": 0},
+            dedupe_radius_arcsec=0.0,
+            dedupe_radius_arcsec_overrides={"a": 0, "b": 0},
         )
 
 
@@ -323,7 +342,8 @@ def test_non_numeric_catalog_coordinates_are_rejected():
             {"a": table, "b": catalog([2], offsets=[0.1])},
             anchor="a",
             links={"b": SpatialLink(1)},
-            dedupe_radius_arcsec={"a": 0, "b": 0},
+            dedupe_radius_arcsec=0.0,
+            dedupe_radius_arcsec_overrides={"a": 0, "b": 0},
         )
 
 
@@ -339,8 +359,88 @@ def test_low_precision_column_warns_once_through_every_conversion(recwarn):
         {"a": table, "b": catalog([2], offsets=[0.1])},
         anchor="a",
         links={"b": SpatialLink(1)},
-        dedupe_radius_arcsec={"a": 0, "b": 0},
+        dedupe_radius_arcsec=0.0,
+        dedupe_radius_arcsec_overrides={"a": 0, "b": 0},
     )
     assert [str(w.message)[:28] for w in recwarn.list] == [
         "survey 'a': ra is 32-bit flo"
     ]
+
+
+@pytest.mark.parametrize("empty_uid_link", [False, True])
+def test_hub_kernel_and_dedupe_are_reused_and_spokes_released(
+    monkeypatch, empty_uid_link
+):
+    import weakref
+
+    from astribidem import hub_and_spoke as module
+
+    kernels, dedupes = {}, []
+    original_kernel, original_dedupe = module._spatial_kernel, module.dedupe_survey
+
+    def prepare(name, table):
+        if name != "a":
+            assert kernels["a"]() is not None
+            assert all(ref() is None for n, ref in kernels.items() if n != "a")
+        kernel = original_kernel(name, table)
+        assert name not in kernels
+        kernels[name] = weakref.ref(kernel)
+        return kernel
+
+    def dedupe(name, radius, kernel):
+        dedupes.append(name)
+        return original_dedupe(name, radius, kernel)
+
+    monkeypatch.setattr(module, "_spatial_kernel", prepare)
+    monkeypatch.setattr(module, "dedupe_survey", dedupe)
+    tables = {
+        "uid": catalog([300], uid=[99 if empty_uid_link else 1]),
+        "a": catalog([10, 11, 12], uid=[1, 2, 3], offsets=[0, 0.1, 20]),
+        "b": catalog([20, 21], offsets=[0.05, 20.05]),
+        "c": catalog([30, 31], offsets=[0.08, 20.08]),
+    }
+    result = match_hub_and_spoke(
+        tables,
+        anchor="a",
+        links={"uid": UIDLink(), "b": SpatialLink(1), "c": SpatialLink(1)},
+        dedupe_radius_arcsec=0.2,
+        dedupe_radius_arcsec_overrides={"b": 0.0},
+    )
+    assert dedupes == ["a", "b", "c"]
+    assert all(ref() is None for ref in kernels.values())
+    assert result.num_rows == (0 if empty_uid_link else 1)
+    if not empty_uid_link:
+        assert result.to_pydict() == {
+            "entity_id": [0],
+            "uid/id": [300],
+            "a/id": [10],
+            "b/id": [20],
+            "c/id": [30],
+        }
+    provenance = json.loads(result.schema.metadata[b"astribidem.resolved_config"])
+    assert provenance["dedupe_radius_arcsec"] == {"a": 0.2, "b": 0.0, "c": 0.2}
+    for name in ("b", "c"):
+        assert provenance["links"][name]["dedupe"]["a"]["n_dropped"] == 1
+        assert provenance["links"][name]["n_matches"] == 2
+
+
+def test_mixed_calls_prepare_fresh_kernels(monkeypatch):
+    from astribidem import hub_and_spoke as module
+
+    original = module._spatial_kernel
+    prepared = []
+
+    def prepare(name, table):
+        prepared.append(name)
+        return original(name, table)
+
+    monkeypatch.setattr(module, "_spatial_kernel", prepare)
+    for offset, expected in ((0.1, 1), (10, 0)):
+        result = match_hub_and_spoke(
+            {"a": catalog([1], offsets=[0]), "b": catalog([2], offsets=[offset])},
+            anchor="a",
+            links={"b": SpatialLink(1)},
+            dedupe_radius_arcsec=0,
+        )
+        assert result.num_rows == expected
+    assert prepared == ["a", "b", "a", "b"]

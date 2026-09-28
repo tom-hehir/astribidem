@@ -5,31 +5,20 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from math import isfinite
-from numbers import Integral, Real
+from numbers import Integral
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from astribidem.api import crossmatch
-from astribidem.edges import survey_coords_from_arrays
-from astribidem.kernel import float64_coordinates, resolve_workers
+from astribidem._formats import index_metadata
+from astribidem._radii import dedupe_radii, radius
+from astribidem.api import resolve
+from astribidem.candidate_edges import CandidateEdges
+from astribidem.edges import build_pair_edges, dedupe_survey
+from astribidem.kernel import CatalogKernel, resolve_workers
 from astribidem.modes import SUBSET_JOIN_POLICIES, DegenerateCrossmatchConfig
 from astribidem.uids import match_uids
-
-
-def _radius(value: float, *, allow_zero: bool = False) -> float:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, Real)
-        or not isfinite(value)
-        or value < 0
-        or (not allow_zero and value == 0)
-    ):
-        bound = ">= 0" if allow_zero else "> 0"
-        raise ValueError(f"radius must be a finite number {bound}")
-    return float(value)
 
 
 @dataclass(frozen=True)
@@ -45,13 +34,15 @@ class SpatialLink:
     policy: str = "mutual_nearest"
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "radius_arcsec", _radius(self.radius_arcsec))
+        object.__setattr__(
+            self, "radius_arcsec", radius(self.radius_arcsec, name="radius_arcsec")
+        )
         if not isinstance(self.policy, str) or self.policy not in SUBSET_JOIN_POLICIES:
             raise ValueError(f"unknown spatial policy: {self.policy!r}")
 
 
-def _spatial_input(name: str, table: pa.Table):
-    """Coordinates for spatial matching, in the catalog's row order."""
+def _spatial_kernel(name: str, table: pa.Table) -> CatalogKernel:
+    """Prepare one spatial participant in its original row order."""
     if not {"ra", "dec"} <= set(table.column_names):
         raise ValueError(f"spatial catalog {name!r} requires ra and dec columns")
     for column in ("ra", "dec"):
@@ -60,15 +51,11 @@ def _spatial_input(name: str, table: pa.Table):
             raise ValueError(f"catalog {name!r}: {column} must be numeric")
         if values.null_count:
             raise ValueError(f"catalog {name!r}: {column} must be non-null")
-    ra, dec = float64_coordinates(
+    return CatalogKernel(
         table["ra"].to_numpy(zero_copy_only=False),
         table["dec"].to_numpy(zero_copy_only=False),
         name=name,
     )
-    for column, values in (("ra", ra), ("dec", dec)):
-        if not np.isfinite(values).all():
-            raise ValueError(f"catalog {name!r}: {column} must be finite")
-    return survey_coords_from_arrays(name, ra, dec)
 
 
 def match_hub_and_spoke(
@@ -76,7 +63,8 @@ def match_hub_and_spoke(
     *,
     anchor: str,
     links: Mapping[str, UIDLink | SpatialLink],
-    dedupe_radius_arcsec: Mapping[str, float],
+    dedupe_radius_arcsec: float,
+    dedupe_radius_arcsec_overrides: Mapping[str, float] | None = None,
     workers: int = 1,
 ) -> pa.Table:
     """Match every spoke to one anchor using UID or spatial links.
@@ -86,13 +74,15 @@ def match_hub_and_spoke(
     succeed, with no spoke-to-spoke tests or groups lacking the anchor.
 
     UID links use each table's ``uid`` column when present, otherwise ``id``.
-    Spatial participants need ``ra`` and ``dec`` in degrees. ``links`` names every non-anchor source;
-    explicit dedupe radii name exactly the anchor and its spatial counterparts
-    (or an empty mapping when there are no spatial links).
+    Spatial participants need ``ra`` and ``dec`` in degrees. ``links`` names
+    every non-anchor source. The scalar ``dedupe_radius_arcsec`` applies to
+    the anchor and its spatial counterparts; optional
+    ``dedupe_radius_arcsec_overrides`` names exceptions among those participants.
+    Use zero to disable spatial deduplication; UID uniqueness is unchanged.
 
     Every link uses its complete input catalogs, even when another link has no
     matches. This preserves spatial ambiguity and deduplication decisions.
-    Successful links are combined only by anchor ID, with inner intersection;
+    Successful links are combined only by anchor row, with inner intersection;
     counterparts need not match each other. This differs from
     the all-pairs contract of an N-survey spatial subset join.
 
@@ -118,17 +108,11 @@ def match_hub_and_spoke(
     spatial = {name for name, link in links.items() if isinstance(link, SpatialLink)}
     if spatial:
         spatial.add(anchor)
-    if (
-        not isinstance(dedupe_radius_arcsec, Mapping)
-        or set(dedupe_radius_arcsec) != spatial
-    ):
-        raise ValueError(
-            "dedupe_radius_arcsec must name exactly the spatial participants"
-        )
-    dedupe_radii = {
-        name: _radius(radius, allow_zero=True)
-        for name, radius in dedupe_radius_arcsec.items()
-    }
+    radii = dedupe_radii(
+        (name for name in names if name in spatial),
+        dedupe_radius_arcsec,
+        dedupe_radius_arcsec_overrides,
+    )
     if isinstance(workers, bool) or not isinstance(workers, Integral):
         raise TypeError("workers must be an integer >= 1 or -1")
     workers = resolve_workers(int(workers))
@@ -136,7 +120,6 @@ def match_hub_and_spoke(
     uid_sources = {name for name, link in links.items() if isinstance(link, UIDLink)}
     if uid_sources:
         uid_sources.add(anchor)
-    surveys = {}
     for name, table in catalogs.items():
         if not isinstance(table, pa.Table):
             raise TypeError(f"catalog {name!r} must be a pyarrow.Table")
@@ -144,8 +127,12 @@ def match_hub_and_spoke(
             raise ValueError(f"catalog {name!r} has duplicate column names")
         if name in uid_sources and not {"uid", "id"} & set(table.column_names):
             raise ValueError(f"catalog {name!r} needs a uid or id column for UID links")
-        if name in spatial:
-            surveys[name] = _spatial_input(name, table)
+
+    # The full anchor is prepared once for this invocation. Every spatial
+    # spoke reuses its tree and dedupe verdict, including after an empty link.
+    if spatial:
+        hub_kernel = _spatial_kernel(anchor, catalogs[anchor])
+        hub_outcome, hub_active = dedupe_survey(anchor, radii[anchor], hub_kernel)
 
     rows = {anchor: pa.array(np.arange(catalogs[anchor].num_rows, dtype=np.int64))}
     link_provenance = {}
@@ -173,17 +160,29 @@ def match_hub_and_spoke(
                 ),
             }
         else:
-            pair = crossmatch(
-                [surveys[source] for source in pair_names],
-                radius_arcsec=link.radius_arcsec,
-                dedupe_radius_arcsec={
-                    source: dedupe_radii[source] for source in pair_names
-                },
-                mode=DegenerateCrossmatchConfig(
-                    surveys=list(pair_names), policy=link.policy
-                ),
+            spoke_kernel = _spatial_kernel(name, catalogs[name])
+            spoke_outcome, spoke_active = dedupe_survey(name, radii[name], spoke_kernel)
+            edge = build_pair_edges(
+                anchor,
+                name,
+                hub_active,
+                spoke_active,
+                link.radius_arcsec,
+                kernel_a=hub_kernel,
+                kernel_b=spoke_kernel,
                 workers=workers,
             )
+            del spoke_kernel, spoke_active
+            pair = resolve(
+                CandidateEdges(
+                    surveys=(hub_outcome, spoke_outcome),
+                    pairs={frozenset(pair_names): edge},
+                ),
+                DegenerateCrossmatchConfig(
+                    surveys=list(pair_names), policy=link.policy
+                ),
+            )
+            del edge, spoke_outcome
             pair_rows = {source: pair[f"{source}/row_index"] for source in pair_names}
             link_provenance[name] = {
                 "method": "sky",
@@ -205,7 +204,8 @@ def match_hub_and_spoke(
         rows[name] = pc.take(pair_rows[name], pc.filter(positions, keep))
         del pair, pair_rows, positions, keep
 
-    del surveys
+    if spatial:
+        del hub_kernel, hub_outcome, hub_active
 
     configuration = {
         "method": "hub_and_spoke",
@@ -214,7 +214,7 @@ def match_hub_and_spoke(
         "topology": "anchor-pairs",
         "ordering": "anchor_input_order",
         "links": link_provenance,
-        "dedupe_radius_arcsec": dedupe_radii,
+        "dedupe_radius_arcsec": radii,
         "surveys": [{"name": name} for name in names],
     }
     columns = {"entity_id": pa.array(np.arange(len(rows[anchor]), dtype=np.int64))}
@@ -222,8 +222,9 @@ def match_hub_and_spoke(
         columns[f"{name}/row_index"] = pc.cast(rows.pop(name), pa.int64())
     return pa.table(columns).replace_schema_metadata(
         {
+            **index_metadata(),
             b"astribidem.resolved_config": json.dumps(
                 configuration, sort_keys=True, separators=(",", ":"), allow_nan=False
-            ).encode()
+            ).encode(),
         }
     )

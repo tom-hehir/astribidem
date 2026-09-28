@@ -30,6 +30,7 @@ from typing import Any
 import numpy as np
 import pyarrow as pa
 
+from astribidem._formats import check_index_metadata, index_metadata
 from astribidem.candidate_edges import CandidateEdges
 from astribidem.graph import build_global_graph
 
@@ -73,6 +74,7 @@ class CrossmatchModeConfig(ABC):
 
 def _with_summary(table: pa.Table, summary: dict[str, Any]) -> pa.Table:
     metadata = dict(table.schema.metadata or {})
+    metadata.update(index_metadata())
     metadata[_SUMMARY_KEY] = json.dumps(
         summary, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
@@ -84,7 +86,9 @@ _SUMMARY_KEY = b"astribidem.summary"
 
 def index_summary(index: pa.Table) -> dict[str, Any]:
     """The summary saved in a resolved index's metadata, such as its entity count."""
-    return json.loads((index.schema.metadata or {})[_SUMMARY_KEY])
+    metadata = index.schema.metadata or {}
+    check_index_metadata(metadata)
+    return json.loads(metadata[_SUMMARY_KEY])
 
 
 def mode_to_mapping(mode: CrossmatchModeConfig) -> dict[str, Any]:
@@ -705,9 +709,7 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
             b"astribidem.entity_index.resolver": self.resolver.encode(),
             b"astribidem.entity_index.disputed": self.disputed.encode(),
             b"astribidem.entity_index.size_cap": str(self.size_cap).encode(),
-            b"astribidem.entity_index.pair_radius_arcsec": _json_bytes(
-                radius_entries
-            ),
+            b"astribidem.entity_index.pair_radius_arcsec": _json_bytes(radius_entries),
         }
         if self.priority is not None:
             metadata[b"astribidem.entity_index.priority"] = _json_bytes(
@@ -717,9 +719,9 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
             metadata[b"astribidem.entity_index.selection.min_surveys"] = str(
                 self.selection.min_surveys
             ).encode()
-            metadata[
-                b"astribidem.entity_index.selection.must_include_surveys"
-            ] = _json_bytes(list(self.selection.must_include_surveys))
+            metadata[b"astribidem.entity_index.selection.must_include_surveys"] = (
+                _json_bytes(list(self.selection.must_include_surveys))
+            )
         table = pa.table(arrays).replace_schema_metadata(metadata)
         summary = {
             "mode": "entitywise",
