@@ -25,6 +25,7 @@ from astro_crossmatch.edge_files import (
 )
 from astro_crossmatch.edges import SurveyCoords, build_edges, survey_coords_from_arrays
 from astro_crossmatch.hub_and_spoke import SpatialLink, UIDLink, match_hub_and_spoke
+from astro_crossmatch.index_files import resolve_to_file
 from astro_crossmatch.kernel import CatalogKernel
 from astro_crossmatch.modes import (
     CrossmatchModeConfig,
@@ -61,6 +62,7 @@ __all__ = [
     "read_edges",
     "read_segment",
     "resolve",
+    "resolve_to_file",
     "rows_to_ids",
     "segment_names",
     "survey_coords_from_arrays",
