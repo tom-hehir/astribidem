@@ -256,12 +256,11 @@ def dedupe_radec(
     radius_arcsec: float,
     *,
     name: str = "dataset",
-    ids: np.ndarray | None = None,
 ) -> tuple[DedupeOutcome, np.ndarray]:
     """De-duplicate one dataset's rows below its resolution floor.
 
     Runs Astral's per-survey dedupe: within-radius connected components that
-    are cliques keep exactly one row (the lowest stable ID); non-clique
+    are cliques keep exactly one row (the lowest row); non-clique
     components are *disputed* — every member is flagged and excluded.
 
     Args:
@@ -270,18 +269,12 @@ def dedupe_radec(
         radius_arcsec: The dataset's resolution floor; ``0.0`` opts out
             (everything stays active).
         name: Dataset name, carried into the outcome for reporting.
-        ids: Stable per-row IDs used to pick each clique's keeper. Defaults to
-            the row index — deterministic for in-memory arrays, which (unlike
-            HATS catalogs) do have a canonical row order.
 
     Returns:
         The :class:`DedupeOutcome` (dropped / keeper / disputed row indices)
         and the boolean active-row mask (``True`` = row survives).
     """
-    ra = np.asarray(ra, dtype=np.float64)
-    if ids is None:
-        ids = np.arange(len(ra), dtype=np.int64)
-    coords = survey_coords_from_arrays(name, ids, ra, dec)
+    coords = survey_coords_from_arrays(name, ra, dec)
     return dedupe_survey(coords, radius_arcsec)
 
 

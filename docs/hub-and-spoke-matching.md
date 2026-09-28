@@ -78,14 +78,15 @@ N-source all-pairs subset joins and entitywise `refuse`, `sequential` and
 `split` resolution. These are not applied across the independent hub-and-spoke
 links. The lower-level `geometry.crossmatch_radec` adapter also supports
 `matching_topology="anchor-pairs"` with complete matches, returning positional
-arrays rather than this stable-ID product.
+arrays rather than this typed-ID product.
 
 ## Implementation boundary
 
 The implementation lives in `hub_and_spoke.py` and calls the existing matchers.
-Arrow IDs/UIDs stay native. For the spatial API, Arrow-sorted ID ranks serve as
-integer surrogates, preserving its lowest-stable-ID dedupe rule without creating
-Python string objects. Original IDs are gathered into the final table.
+Arrow IDs/UIDs stay native. Spatial links match row positions, so spatial
+matching never sees the IDs. Spatial dedupe keeps the lowest row of each
+duplicate group and therefore follows the catalog's row order. Original IDs are
+gathered into the final table.
 
 All matching remains in memory. Spatial links currently execute sequentially;
 `workers` controls the existing spatial matcher within each link. Repeated

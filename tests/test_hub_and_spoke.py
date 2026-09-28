@@ -99,8 +99,9 @@ def test_earlier_uid_filter_does_not_remove_full_input_spatial_competitor(uid_fi
 def test_uid_eligibility_does_not_change_full_anchor_dedupe_keeper():
     result = match_hub_and_spoke(
         {
+            # Dedupe keeps a's first row; the UID link targets the dropped one.
             "a": catalog([20, 10], uid=[2, 1], offsets=[0, 0.1]),
-            "uid": catalog([100], uid=[2]),
+            "uid": catalog([100], uid=[1]),
             "sky": catalog([200], offsets=[0.05]),
         },
         anchor="a",
@@ -149,11 +150,9 @@ def test_empty_uid_link_does_not_skip_validation_of_other_full_inputs(invalid):
         (pa.uint64(), [2**64 - 1, 2**63 + 1, 2**63]),
     ],
 )
-def test_spatial_surrogates_keep_lowest_original_id_and_original_arrow_type(
-    id_type, values
-):
-    table = catalog(values, uid=[3, 2, 1], offsets=[0, 0.05, 0.1], id_type=id_type)
-    # Chunked IDs must remain native when ranked for the spatial API.
+def test_spatial_dedupe_keeps_first_row_and_original_arrow_type(id_type, values):
+    table = catalog(values, uid=[1, 2, 3], offsets=[0, 0.05, 0.1], id_type=id_type)
+    # Chunked IDs must remain native through matching.
     table = table.set_column(
         0, "id", pa.chunked_array([[], values[:1], [], values[1:]], type=id_type)
     )
@@ -168,7 +167,7 @@ def test_spatial_surrogates_keep_lowest_original_id_and_original_arrow_type(
         dedupe_radius_arcsec={"a": 0.2, "sky": 0},
     )
     assert result["a/id"].type == id_type
-    assert result["a/id"].to_pylist() == [values[-1]]
+    assert result["a/id"].to_pylist() == [values[0]]
     assert result["sky/id"].type == pa.uint64()
     assert result["sky/id"].to_pylist() == [2**64 - 1]
     metadata = json.loads(result.schema.metadata[b"astro_crossmatch.resolved_config"])

@@ -19,3 +19,9 @@ runtime dependencies. Upstream repositories were not changed by this extraction.
 
 One inherited empty-survey entity-resolution defect was corrected: an entirely
 absent survey now produces typed null IDs rather than indexing its empty ID array.
+
+Spatial indexes now carry row positions, with IDs mapped afterwards by
+`rows_to_ids`. Dedupe therefore keeps the lowest row of each duplicate group,
+which is AION-2's rule, instead of Astral's lowest stable ID.
+`tests/test_aion_parity.py` compares the matching core with indexes recorded
+from AION-2; `tests/fixtures/generate_aion_parity.py` records them.
