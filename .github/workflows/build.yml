@@ -1,0 +1,39 @@
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      release-tag:
+        description: Optional release tag; must equal v plus the package version
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --locked --extra dev
+      - name: Check release version
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: uv run --no-sync python scripts/check_release.py "$RELEASE_TAG"
+      - name: Build sdist and wheel from the sdist
+        run: uv build
+      - name: Check package metadata and README rendering
+        run: uv run --no-sync twine check --strict dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-distributions
+          path: dist/*
+          if-no-files-found: error

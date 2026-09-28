@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   checks:
-    uses: ./.github/workflows/checks.yml
+    uses: ./.github/workflows/ci.yml
     with:
       release-tag: ${{ github.event.release.tag_name || github.ref_name }}
 

@@ -1,0 +1,53 @@
+name: Test
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Check base and large installations without test dependencies
+        run: |
+          wheel=(dist/*.whl)
+          for extra in base large; do
+            environment=".smoke-$extra"
+            uv venv "$environment"
+            requirement="${wheel[0]}"
+            if [[ "$extra" == large ]]; then requirement+="[large]"; fi
+            uv pip install --python "$environment" "$requirement"
+            uv run --no-project --python "$environment" python scripts/smoke_install.py "$extra"
+          done
+      - name: Install the built wheel in an isolated environment
+        run: |
+          uv venv .ci-venv
+          wheel=(dist/*.whl)
+          uv pip install --python .ci-venv "${wheel[0]}[test]" coverage
+          uv run --no-project --python .ci-venv python -c "import astribidem; assert 'site-packages' in astribidem.__file__, astribidem.__file__"
+      - name: Run tests against the installed wheel
+        run: uv run --no-project --python .ci-venv coverage run -m pytest --durations=15 --durations-min=1
+      - name: Report coverage
+        if: ${{ always() && hashFiles('.coverage') != '' }}
+        run: |
+          uv run --no-project --python .ci-venv coverage xml
+          uv run --no-project --python .ci-venv coverage report
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() && hashFiles('coverage.xml') != '' }}
+        with:
+          name: coverage
+          path: coverage.xml

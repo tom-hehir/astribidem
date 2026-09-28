@@ -2,10 +2,10 @@
 
 ## Local checks
 
-Use Python 3.11 or newer and a project environment:
+Use Python 3.14 to match CI and create a project environment:
 
 ```sh
-uv sync --locked --extra dev
+uv sync --locked --extra dev --python 3.14
 uv run --no-sync pre-commit install
 uv run --no-sync pre-commit run --all-files
 uv run --no-sync pytest
@@ -15,15 +15,24 @@ uv run --no-sync twine check --strict dist/*
 
 Update `uv.lock` with `uv lock` when changing dependencies. It fixes the
 development tools; consumers resolve the ranges in `pyproject.toml`. CI tests
-both current dependencies and `tests/minimum-requirements.txt` against the
-built wheel. Keep that file aligned with the supported dependency floors.
+the built wheel with current compatible dependencies on Ubuntu and Python 3.14.
+The package still accepts Python 3.11+, but CI only exercises Python 3.14.
 DuckDB 1.5 is required for the Arrow reader used by sorted segment resolution.
 
-CI runs on pull requests, pushes to `main`, and manual dispatch. It includes
-pre-commit, a wheel built from the source distribution, strict metadata checks,
-Python 3.11–3.14 on Linux, Python 3.13 on macOS and Windows, and separate base
-and `large` installation checks without test dependencies. Coverage XML is
-retained as a workflow artifact; no external coverage service is required.
+CI runs on pull requests, pushes to `main`, and manual dispatch. Its three jobs
+are defined in separate reusable workflow files:
+
+- `pre-commit.yml` runs formatting and static checks.
+- `build.yml` builds the source distribution and a wheel from it, checks package
+  metadata and README rendering, and uploads the distributions.
+- `test.yml` checks isolated base and `large` installations without test
+  dependencies, then runs the full suite against the built wheel and retains
+  coverage XML as a workflow artifact.
+
+All three use Ubuntu and Python 3.14. `ci.yml` connects them, running pre-commit
+alongside the build and starting tests once the distributions are available.
+`release.yml` calls that same pipeline before publishing; the three reusable
+workflows do not run independently on repository events.
 
 ## One-time Trusted Publisher registration
 
