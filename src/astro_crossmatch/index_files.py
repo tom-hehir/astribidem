@@ -6,8 +6,16 @@ Segments never share a connected group of rows, so the entities are exactly
 those of resolving every segment together. With ``sort=True`` (the default)
 the per-segment indexes, each already in entity order, are merged into the
 global entity order: first present survey, then that survey's row. The result
-then equals ``resolve(read_edges(directory), mode).table``, metadata included,
-while holding only one batch per segment in memory.
+then equals ``resolve(read_edges(directory), mode).table``, metadata included.
+
+Memory stays near ``batch_rows`` index rows however many segments there are.
+Each segment's index is saved as a temporary Arrow IPC file of
+``batch_rows / n_segments``-row batches, and the merge reads the files
+through memory maps, one batch at a time; the output is written in row groups
+of ``batch_rows``. A band segment's rows are scattered over the whole row
+range, so reading a full batch from every segment would hold nearly the whole
+index at once, and Parquet readers would hold decoding buffers for every
+open segment.
 """
 
 from __future__ import annotations
@@ -29,9 +37,38 @@ _ROW_BITS = 40  # row numbers below 2**40; survey positions fill the bits above
 
 
 def _resolve_segment(arguments) -> None:
-    edges_directory, name, mode, path = arguments
+    edges_directory, name, mode, path, batch_rows = arguments
     table = resolve(read_segment(edges_directory, name), mode).table
-    pq.write_table(table, path)
+    with pa.OSFile(path, "wb") as sink, pa.ipc.new_file(sink, table.schema) as writer:
+        writer.write_table(table, max_chunksize=batch_rows)
+
+
+def _batches(reader: pa.ipc.RecordBatchFileReader):
+    return (reader.get_batch(i) for i in range(reader.num_record_batches))
+
+
+def _open_segment(path: Path) -> pa.ipc.RecordBatchFileReader:
+    return pa.ipc.open_file(pa.memory_map(str(path)))
+
+
+class _BatchWriter:
+    """Collect tables and write them in row groups of ``batch_rows``."""
+
+    def __init__(self, writer: pq.ParquetWriter, batch_rows: int):
+        self.writer, self.batch_rows = writer, batch_rows
+        self.tables: list[pa.Table] = []
+        self.n_rows = 0
+
+    def add(self, table: pa.Table) -> None:
+        self.tables.append(table)
+        self.n_rows += table.num_rows
+        if self.n_rows >= self.batch_rows:
+            self.flush()
+
+    def flush(self) -> None:
+        if self.n_rows:
+            self.writer.write_table(pa.concat_tables(self.tables))
+        self.tables, self.n_rows = [], 0
 
 
 def _is_count(key: str) -> bool:
@@ -75,12 +112,12 @@ def _entity_keys(batch: pa.RecordBatch | pa.Table, row_columns: list[str]):
     return keys
 
 
-def _merge_sorted(paths: list[Path], writer: pq.ParquetWriter, batch_rows: int):
+def _merge_sorted(paths: list[Path], output: _BatchWriter):
     """K-way merge of per-segment indexes that are each sorted by entity key."""
-    readers = [pq.ParquetFile(path) for path in paths]
-    schema = readers[0].schema_arrow
+    readers = [_open_segment(path) for path in paths]
+    schema = readers[0].schema
     row_columns = [name for name in schema.names if name.endswith("/row_index")]
-    streams = [reader.iter_batches(batch_size=batch_rows) for reader in readers]
+    streams = [_batches(reader) for reader in readers]
     buffers: list[pa.Table | None] = [None] * len(streams)
     keys: list[np.ndarray | None] = [None] * len(streams)
 
@@ -111,9 +148,7 @@ def _merge_sorted(paths: list[Path], writer: pq.ParquetWriter, batch_rows: int):
                 refill(i)
         chunk = pa.concat_tables(tables)
         order = np.argsort(np.concatenate(table_keys), kind="stable")
-        writer.write_table(chunk.take(order))
-    for reader in readers:
-        reader.close()
+        output.add(chunk.take(order))
 
 
 def resolve_to_file(
@@ -123,24 +158,26 @@ def resolve_to_file(
     *,
     processes: int = 1,
     sort: bool = True,
-    batch_rows: int = 65_536,
+    batch_rows: int = 1_048_576,
 ) -> None:
     """Resolve every segment of saved edges and write one index file.
 
     ``processes`` resolves segments in parallel. With ``sort=False`` the index
     lists each segment's entities in segment order instead of merging them.
-    ``batch_rows`` sets how many rows of each segment the merge holds at once.
+    ``batch_rows`` sets how many index rows the merge holds at once, across all
+    segments, and the output's row-group size.
     """
     edges_directory = Path(edges_directory)
     index_path = Path(index_path)
     names = segment_names(edges_directory)
+    segment_rows = max(1, batch_rows // len(names))
     work = index_path.with_name(f".{index_path.name}.segments")
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
     try:
-        paths = [work / f"{name}.parquet" for name in names]
+        paths = [work / f"{name}.arrow" for name in names]
         tasks = [
-            (str(edges_directory), name, mode, str(path))
+            (str(edges_directory), name, mode, str(path), segment_rows)
             for name, path in zip(names, paths)
         ]
         if processes > 1:
@@ -149,15 +186,18 @@ def resolve_to_file(
         else:
             for task in tasks:
                 _resolve_segment(task)
-        metadatas = [pq.read_schema(path).metadata for path in paths]
-        schema = pq.read_schema(paths[0]).with_metadata(_merged_metadata(metadatas))
+        metadatas = [_open_segment(path).schema.metadata for path in paths]
+        schema = _open_segment(paths[0]).schema.with_metadata(
+            _merged_metadata(metadatas)
+        )
         with pq.ParquetWriter(index_path, schema) as writer:
+            output = _BatchWriter(writer, batch_rows)
             if sort:
-                _merge_sorted(paths, writer, batch_rows)
+                _merge_sorted(paths, output)
             else:
                 for path in paths:
-                    with pq.ParquetFile(path) as reader:
-                        for batch in reader.iter_batches(batch_size=batch_rows):
-                            writer.write_table(pa.Table.from_batches([batch]))
+                    for batch in _batches(_open_segment(path)):
+                        output.add(pa.Table.from_batches([batch]))
+            output.flush()
     finally:
         shutil.rmtree(work, ignore_errors=True)
