@@ -1,4 +1,4 @@
-"""Exercise the wheel's base/large dependency boundaries without test extras."""
+"""Exercise the wheel's base and out-of-core dependency boundaries without test extras."""
 
 import importlib.util
 import sys
@@ -21,10 +21,10 @@ from astribidem import (
 
 def main():
     extra = sys.argv[1]
-    assert extra in ("base", "large")
+    assert extra in ("base", "out-of-core")
     assert "site-packages" in astribidem.__file__, astribidem.__file__
     assert importlib.util.find_spec("astropy") is None
-    assert (importlib.util.find_spec("duckdb") is not None) == (extra == "large")
+    assert (importlib.util.find_spec("duckdb") is not None) == (extra == "out-of-core")
     surveys = {"a": ([10.0, 20.0], [0.0, 0.0]), "b": ([10.0001, 30.0], [0.0, 0.0])}
     settings = {
         "radius_arcsec": 1.0,
@@ -39,7 +39,7 @@ def main():
         root = Path(directory)
         write_edges(build_edges(surveys, **settings), root / "edges")
         resolve_to_file(
-            root / "edges", mode, root / "index.parquet", sort=extra == "large"
+            root / "edges", mode, root / "index.parquet", sort=extra == "out-of-core"
         )
         assert pq.read_table(root / "index.parquet").equals(rows, check_metadata=True)
     print(f"{extra} installation passed ({astribidem.__version__})")

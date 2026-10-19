@@ -1,45 +1,27 @@
-"""Exact spatial pair-generation kernel: scipy cKDTree over unit vectors.
+"""Exact spatial pair search: a scipy cKDTree over float64 unit vectors.
 
-Coordinates become float64 Cartesian unit vectors, angular radii become chord
-lengths, and every query is exact — no approximate structures, since a missed
-pair is a silent duplicate entity. Adopted 2026-08-13 (AION-2 issue #188,
-transplanted here per astral-projections issue #8) after a measured
-head-to-head against the smatch C HEALPix engine: the dual-tree join is ~10x
-faster on the production-density benchmark, chord separations avoid smatch's
-~0.05" ``1 - cos`` cancellation floor, and no GPL dependency is needed.
+Coordinates become float64 Cartesian unit vectors and angular radii become
+chord lengths. Every query is exact, because a missed pair would silently
+become a duplicate entity. The kernel guarantees:
 
-The kernel contract:
+- one ``CatalogKernel`` per survey serves its dedupe self-match and every pair
+  it takes part in; trees are built with ``compact_nodes=True,
+  balanced_tree=True``, which reference the coordinates rather than copy them;
+- the boundary is inclusive: pairs at exactly the radius are emitted
+  (separation <= r). scipy's ``query(distance_upper_bound=...)`` is exclusive
+  at the bound, so the k-truncated path raises the bound by one ulp;
+- output is deterministic: every emitting method sorts pairs by ``(i, j)``;
+- separations are exact: float64 chord lengths converted by ``2 asin(d / 2)``.
 
-- **Build once, match many.** One ``CatalogKernel`` per survey serves its
-  dedupe self-match and every pair it participates in. Trees are built with
-  ``compact_nodes=True, balanced_tree=True`` (data referenced, not copied;
-  ~24 B/row overhead) — kernel policy, not configuration.
-- **Boundary is inclusive.** Pairs at exactly the radius are included
-  (separation <= r) by every emitting method. scipy's
-  ``query(distance_upper_bound=...)`` is exclusive at the bound, so the
-  k-truncated path bumps it by one ulp to match.
-- **Deterministic output.** Raw dual-tree output follows traversal order, so
-  every emitting method lexsorts by ``(i, j)`` before returning.
-- **Exact separations.** float64 chord lengths converted through
-  ``2 asin(d / 2)``; there is no cosine-distance path.
+``workers`` on ``all_pairs`` splits the query rows into chunks, each with its
+own tree joined against the other survey's tree in a thread: the C join
+releases the GIL but has no workers option. A minimum chunk size keeps small
+inputs in one call. Chunks partition the rows in order and each is sorted, so
+the result equals the one-call join bit for bit. ``all_pairs_chunks`` yields
+the chunks in order with at most ``workers`` in flight.
 
-Parallelism: the dual-tree join and ``query_pairs`` are single-threaded C
-routines with no ``workers`` option, but they release the GIL, so ``workers``
-on ``all_pairs`` splits the query side into chunks — a throwaway tree per
-chunk, joined against the resident right tree, one call per thread. Chunking
-exists only to manufacture parallel calls (serially it costs ~2.5x); the
-chunk count is capped by a minimum chunk size so small inputs stay one-shot.
-Because chunks partition ``i`` in order and each chunk is lexsorted, the
-concatenated output is bit-identical to the one-shot join.
-``all_pairs_chunks`` yields the same chunks in order with at most ``workers``
-in flight, so a consumer that writes each chunk out holds only
-``workers * chunk_rows`` query rows' worth of pairs at a time.
-
-Deliberately absent: a minimum-radius "too close" veto. The old matching
-layer's ``min_radius_arcsec`` veto was its only guard against duplicates and
-blends; here per-survey dedupe and the entitywise dispute machinery own that
-concern, and the edge substrate must stay complete — pre-filtering edges can
-convert a disputed component into a false clean clique.
+There is no minimum-separation veto: the pair set must stay complete, because
+removing a pair can turn a disputed component into a false clean one.
 """
 
 from __future__ import annotations
@@ -115,6 +97,22 @@ def xyz_to_radec(xyz: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return ra, dec
 
 
+def check_match_radius(radius_arcsec: float, what: str = "matching radius") -> None:
+    """Refuse a matching radius that is not a positive, finite number.
+
+    A non-positive radius does not fail on its own: zero matches nothing, and a
+    negative one becomes a negative chord that the tree treats as positive, so
+    either would silently give a wrong match.
+
+    Raises:
+        ValueError: ``radius_arcsec`` is not a positive finite number.
+    """
+    if not (math.isfinite(radius_arcsec) and radius_arcsec > 0):
+        raise ValueError(
+            f"{what} must be a positive number of arcseconds, got {radius_arcsec!r}"
+        )
+
+
 def arcsec_to_chord(radius_arcsec: float) -> float:
     """Great-circle arcseconds to the unit-sphere chord length."""
     return 2.0 * math.sin(radius_arcsec * _ARCSEC_TO_RAD / 2.0)
@@ -124,12 +122,6 @@ def chord_to_arcsec(chord: np.ndarray) -> np.ndarray:
     """Unit-sphere chord lengths to great-circle arcseconds, exact float64."""
     half = np.clip(np.asarray(chord, dtype=np.float64) / 2.0, 0.0, 1.0)
     return 2.0 * np.arcsin(half) / _ARCSEC_TO_RAD
-
-
-def _validate_radius(radius_arcsec: float) -> float:
-    if not math.isfinite(radius_arcsec) or radius_arcsec < 0:
-        raise ValueError(f"radius_arcsec must be finite and >= 0, got {radius_arcsec}")
-    return arcsec_to_chord(radius_arcsec)
 
 
 #: Chunks smaller than this are not worth their per-chunk tree build; the
@@ -165,21 +157,9 @@ class CatalogKernel:
     ) -> None:
         ra_shape, dec_shape = np.shape(ra), np.shape(dec)
         if len(ra_shape) != 1 or len(dec_shape) != 1 or ra_shape != dec_shape:
-            raise ValueError("ra/dec must be aligned 1-D arrays")
-        self._init_from_xyz(radec_to_xyz(ra, dec, name=name))
-
-    @classmethod
-    def from_xyz(cls, xyz: np.ndarray) -> CatalogKernel:
-        """Build from ``(n, 3)`` unit vectors already on the sphere."""
-        xyz = np.asarray(xyz, dtype=np.float64)
-        if xyz.ndim != 2 or xyz.shape[1] != 3:
-            raise ValueError(f"xyz must have shape (n, 3), got {xyz.shape}")
-        kernel = cls.__new__(cls)
-        kernel._init_from_xyz(xyz)
-        return kernel
-
-    def _init_from_xyz(self, xyz: np.ndarray) -> None:
-        self.xyz = xyz
+            where = f"survey {name!r}: " if name is not None else ""
+            raise ValueError(f"{where}ra/dec must be aligned 1-D arrays")
+        self.xyz = radec_to_xyz(ra, dec, name=name)
         self.tree = cKDTree(self.xyz, compact_nodes=True, balanced_tree=True)
 
     def __len__(self) -> int:
@@ -193,7 +173,7 @@ class CatalogKernel:
         The dedupe primitive. Exactly-coincident rows (separation 0) are
         included, as dedupe requires.
         """
-        chord = _validate_radius(radius_arcsec)
+        chord = arcsec_to_chord(radius_arcsec)
         pairs = self.tree.query_pairs(chord, output_type="ndarray")
         pairs = pairs[np.lexsort((pairs[:, 1], pairs[:, 0]))]
         i = pairs[:, 0].astype(np.int64)
@@ -208,7 +188,6 @@ class CatalogKernel:
         k: int | None = None,
         *,
         workers: int = 1,
-        chunk_rows: int | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """In-radius cross pairs ``(i, j, sep_arcsec)``; ``i`` indexes ``self``.
 
@@ -221,14 +200,15 @@ class CatalogKernel:
 
         ``workers`` (``-1`` = all cores, ``1`` = serial one-shot) parallelizes
         the ``k=None`` join by chunking this kernel's rows; output is
-        bit-identical to the serial call. ``chunk_rows`` overrides the
-        automatic per-worker chunk sizing (mainly for tests).
+        bit-identical to the serial call.
+
+        Raises:
+            ValueError: ``radius_arcsec`` is not a positive finite number.
         """
-        chord = _validate_radius(radius_arcsec)
+        check_match_radius(radius_arcsec)
+        chord = arcsec_to_chord(radius_arcsec)
         if k is None:
-            parts = list(
-                self._all_pairs_chunk_arrays(other, chord, workers, chunk_rows)
-            )
+            parts = list(self._all_pairs_chunk_arrays(other, chord, workers, None))
             if len(parts) == 1:
                 return parts[0]
             return tuple(  # type: ignore[return-value]
@@ -270,7 +250,7 @@ class CatalogKernel:
         chunks concatenate to exactly ``all_pairs(other, radius_arcsec)``. At
         most ``workers`` chunks are computed or buffered at once.
         """
-        chord = _validate_radius(radius_arcsec)
+        chord = arcsec_to_chord(radius_arcsec)
         yield from self._all_pairs_chunk_arrays(other, chord, workers, chunk_rows)
 
     def _all_pairs_chunk_arrays(

@@ -1,6 +1,6 @@
 """Build candidate edges for catalogs larger than memory, band by band.
 
-The build runs in three steps (see ``notes/design/banded-edge-builds.md``):
+The build runs in three steps:
 
 1. ``write_band_layout`` streams each survey's coordinates once and writes
    ``(row, ra, dec)`` grouped by declination band.
@@ -35,13 +35,13 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from astribidem._formats import check_file_metadata, file_metadata
 from astribidem.candidate_edges import DedupeOutcome
 from astribidem.edge_files import write_metadata, write_segment
 from astribidem.edges import EdgeSettings, edge_settings
-from astribidem.graph import connected_components
+from astribidem.graph import connected_components, positions_in
+from astribidem.index_table import check_survey_names, pair_name
 from astribidem.kernel import float64_coordinates
-from astribidem.regions import (
+from astribidem.out_of_core.regions import (
     MARGIN_ABOVE,
     MARGIN_BELOW,
     OWNED,
@@ -88,8 +88,7 @@ def write_band_layout(
     directory.mkdir(parents=True, exist_ok=True)
     entries = []
     for name, chunks in surveys.items():
-        if not isinstance(name, str) or not name or "/" in name:
-            raise ValueError("survey names must be non-empty and must not contain '/'")
+        check_survey_names([name])
         survey_directory = directory / name
         survey_directory.mkdir(exist_ok=True)
         index = {"chunk": [], "row_group": [], "band": [], "n_rows": []}
@@ -100,8 +99,6 @@ def write_band_layout(
                 raise ValueError(
                     f"survey {name!r}: ra/dec chunks must be 1-D and aligned"
                 )
-            if not (np.isfinite(ra).all() and np.isfinite(dec).all()):
-                raise ValueError(f"survey {name!r}: coordinates must be finite")
             rows = np.arange(offset, offset + len(ra), dtype=np.int64)
             offset += len(ra)
             bands = band_of(dec, band_height_deg)
@@ -140,7 +137,6 @@ def write_band_layout(
         )
         entries.append({"name": name, "n_rows": offset})
     layout = {
-        **file_metadata("band_layout"),
         "band_height_deg": band_height_deg,
         "surveys": entries,
     }
@@ -149,9 +145,7 @@ def write_band_layout(
 
 def read_layout(directory: str | Path) -> dict:
     """The contents of a layout directory's ``layout.json``."""
-    layout = json.loads((Path(directory) / "layout.json").read_text())
-    check_file_metadata(layout, "band_layout")
-    return layout
+    return json.loads((Path(directory) / "layout.json").read_text())
 
 
 def _read_bands(directory: Path, survey: str, bands: Sequence[int]):
@@ -223,7 +217,6 @@ def prepare_band_build(
     )
     edges_directory.mkdir(parents=True, exist_ok=True)
     plan = {
-        **file_metadata("band_build"),
         "layout": str(layout_directory.resolve()),
         "band_height_deg": layout["band_height_deg"],
         "bands": bands,
@@ -241,7 +234,6 @@ def prepare_band_build(
 
 def _read_plan(edges_directory: Path) -> tuple[dict, EdgeSettings]:
     plan = json.loads((edges_directory / _PLAN).read_text())
-    check_file_metadata(plan, "band_build")
     settings = EdgeSettings(
         survey_names=tuple(plan["surveys"]),
         n_rows={name: int(n) for name, n in plan["n_rows"].items()},
@@ -322,7 +314,7 @@ def _write_handover(directory: Path, settings: EdgeSettings, handover: Handover)
     for (a, b), (row_a, row_b, separation) in handover.edges.items():
         pq.write_table(
             pa.table({"row_a": row_a, "row_b": row_b, "separation_arcsec": separation}),
-            directory / f"edges-{a}__{b}.parquet",
+            directory / f"edges-{pair_name(a, b)}.parquet",
         )
     pq.write_table(
         pa.table({"below": handover.touches[:, 0], "above": handover.touches[:, 1]}),
@@ -341,7 +333,7 @@ def _read_handover(directory: Path, settings: EdgeSettings) -> Handover:
         self_pairs[name] = (pairs["first"].to_numpy(), pairs["second"].to_numpy())
     edges = {}
     for a, b in settings.pair_radius_arcsec:
-        table = pq.read_table(directory / f"edges-{a}__{b}.parquet")
+        table = pq.read_table(directory / f"edges-{pair_name(a, b)}.parquet")
         edges[(a, b)] = (
             table["row_a"].to_numpy(),
             table["row_b"].to_numpy(),
@@ -368,12 +360,11 @@ def _read_handover(directory: Path, settings: EdgeSettings) -> Handover:
 def _row_pieces(handover: Handover, name: str, rows: np.ndarray) -> np.ndarray:
     """The piece of each of ``rows`` in ``handover``, or -1 when absent."""
     order = np.argsort(handover.rows[name], kind="stable")
-    sorted_rows = handover.rows[name][order]
-    if len(sorted_rows) == 0:
-        return np.full(len(rows), -1, dtype=np.int64)
-    index = np.clip(np.searchsorted(sorted_rows, rows), 0, len(sorted_rows) - 1)
-    found = sorted_rows[index] == rows
-    return np.where(found, handover.piece[name][order][index], -1)
+    positions = positions_in(handover.rows[name][order], rows)
+    pieces = np.full(len(rows), -1, dtype=np.int64)
+    found = positions >= 0
+    pieces[found] = handover.piece[name][order][positions[found]]
+    return pieces
 
 
 def _piece_groups(settings: EdgeSettings, handover: Handover) -> np.ndarray:
@@ -503,7 +494,9 @@ def sweep_boundaries(
         [f"band-{band}" for band in plan["bands"]] + boundary_segments,
         extra={"band_height_deg": plan["band_height_deg"]},
     )
-    shutil.rmtree(handover_root)
+    # A build with no rows has no bands, so no band task created the directory.
+    if handover_root.exists():
+        shutil.rmtree(handover_root)
     (edges_directory / _PLAN).unlink()
 
 

@@ -6,7 +6,7 @@ A saved edge directory holds ``metadata.json`` and one directory per segment::
                                             pair radii, and the segment names
     <segment>/rows/<survey>.parquet         row: the rows the segment covers
     <segment>/deduplication/<survey>.parquet  row, status, kept_row
-    <segment>/edges/<a>__<b>.parquet        row_a, row_b, separation_arcsec
+    <segment>/edges/<a>+<b>.parquet         row_a, row_b, separation_arcsec
 
 A segment that covers every row, such as ``segment-0`` of an in-memory build,
 has no ``rows`` directory. ``status`` is ``"dropped"`` or ``"disputed"``;
@@ -25,7 +25,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from numpy.typing import ArrayLike
 
-from astribidem._formats import check_file_metadata, file_metadata
 from astribidem.candidate_edges import (
     CandidateEdges,
     DedupeOutcome,
@@ -33,10 +32,11 @@ from astribidem.candidate_edges import (
     combine_segments,
 )
 from astribidem.edges import (
-    _dedupe_kernels,
-    _prepare_edge_build,
+    dedupe_kernels,
     pair_edge_chunks,
+    prepare_edge_build,
 )
+from astribidem.index_table import pair_name
 from astribidem.kernel import resolve_workers
 
 SINGLE_SEGMENT = "segment-0"
@@ -52,7 +52,7 @@ _EDGE_SCHEMA = pa.schema(
 
 
 def _edge_file(segment: Path, survey_a: str, survey_b: str) -> Path:
-    return segment / "edges" / f"{survey_a}__{survey_b}.parquet"
+    return segment / "edges" / f"{pair_name(survey_a, survey_b)}.parquet"
 
 
 def _dedupe_file(segment: Path, survey: str) -> Path:
@@ -61,15 +61,6 @@ def _dedupe_file(segment: Path, survey: str) -> Path:
 
 def _rows_file(segment: Path, survey: str) -> Path:
     return segment / "rows" / f"{survey}.parquet"
-
-
-def _check_pair_file_names(pairs: Iterable[tuple[str, str]]) -> None:
-    names = [f"{a}__{b}" for a, b in pairs]
-    if len(set(names)) != len(names):
-        raise ValueError(
-            "two survey pairs share an edge file name; rename surveys so that "
-            "no name contains '__'"
-        )
 
 
 def _check_segment_name(name: str) -> None:
@@ -92,7 +83,6 @@ def write_metadata(
     if len(set(segments)) != len(segments):
         raise ValueError("segment names must be unique")
     metadata = {
-        **file_metadata("edges"),
         "surveys": [
             {
                 "name": survey.name,
@@ -111,11 +101,9 @@ def write_metadata(
     (Path(directory) / "metadata.json").write_text(text + "\n")
 
 
-def read_metadata(directory: str | Path) -> dict:
+def read_edges_metadata(directory: str | Path) -> dict:
     """The contents of a saved edge directory's ``metadata.json``."""
-    metadata = json.loads((Path(directory) / "metadata.json").read_text())
-    check_file_metadata(metadata, "edges")
-    return metadata
+    return json.loads((Path(directory) / "metadata.json").read_text())
 
 
 def _write_dedupe(segment: Path, survey: DedupeOutcome) -> None:
@@ -152,7 +140,6 @@ def _make_segment_directories(segment: Path, *, with_rows: bool) -> None:
 def write_segment(directory: str | Path, name: str, edges: CandidateEdges) -> None:
     """Write one segment's files; ``write_metadata`` lists the segments."""
     _check_segment_name(name)
-    _check_pair_file_names((p.survey_a, p.survey_b) for p in edges.pairs.values())
     segment = Path(directory) / name
     with_rows = any(survey.rows is not None for survey in edges.surveys)
     _make_segment_directories(segment, with_rows=with_rows)
@@ -191,7 +178,7 @@ def write_edges(edges: CandidateEdges, directory: str | Path) -> None:
 def read_segment(directory: str | Path, name: str) -> CandidateEdges:
     """Load one saved segment."""
     directory = Path(directory)
-    metadata = read_metadata(directory)
+    metadata = read_edges_metadata(directory)
     if name not in metadata["segments"]:
         raise ValueError(f"no segment {name!r}; segments: {metadata['segments']}")
     segment = directory / name
@@ -236,7 +223,7 @@ def read_segment(directory: str | Path, name: str) -> CandidateEdges:
 
 def segment_names(directory: str | Path) -> list[str]:
     """The segments of a saved edge directory, in their recorded order."""
-    return list(read_metadata(directory)["segments"])
+    return list(read_edges_metadata(directory)["segments"])
 
 
 def read_edges(directory: str | Path) -> CandidateEdges:
@@ -244,14 +231,46 @@ def read_edges(directory: str | Path) -> CandidateEdges:
 
     Every segment is loaded and combined, so this suits edges that fit in
     memory; use ``read_segment`` to process large builds one segment at a time.
+    A build from catalogues with no rows has no segments and reloads as edges
+    covering no rows.
     """
-    return combine_segments(
-        [read_segment(directory, name) for name in segment_names(directory)]
+    names = segment_names(directory)
+    if not names:
+        return _empty_edges(read_edges_metadata(directory))
+    return combine_segments([read_segment(directory, name) for name in names])
+
+
+def _empty_edges(metadata: dict) -> CandidateEdges:
+    """Edges with every survey and pair in ``metadata``, covering no rows."""
+    empty = np.empty(0, dtype=np.int64)
+    surveys = tuple(
+        DedupeOutcome(
+            name=entry["name"],
+            n_rows=entry["n_rows"],
+            dedupe_radius_arcsec=entry["dedupe_radius_arcsec"],
+            dropped_rows=empty,
+            kept_rows=empty,
+            disputed_rows=empty,
+            rows=empty,
+        )
+        for entry in metadata["surveys"]
     )
+    pairs = {
+        frozenset(entry["surveys"]): PairEdges(
+            survey_a=entry["surveys"][0],
+            survey_b=entry["surveys"][1],
+            radius_arcsec=entry["radius_arcsec"],
+            row_a=empty,
+            row_b=empty,
+            separation_arcsec=np.empty(0, dtype=np.float64),
+        )
+        for entry in metadata["pairs"]
+    }
+    return CandidateEdges(surveys=surveys, pairs=pairs)
 
 
 def build_edges_to_directory(
-    surveys: Mapping[str, tuple[ArrayLike, ArrayLike]],
+    coordinates: Mapping[str, tuple[ArrayLike, ArrayLike]],
     directory: str | Path,
     *,
     radius_arcsec: float,
@@ -273,20 +292,19 @@ def build_edges_to_directory(
     memory throughout.
     """
     workers = resolve_workers(workers)
-    plan, kernels = _prepare_edge_build(
-        surveys,
+    plan, kernels = prepare_edge_build(
+        coordinates,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
         radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
     )
-    del surveys
+    del coordinates
     directory = Path(directory)
-    _check_pair_file_names(plan.pair_radius_arcsec)
     segment = directory / SINGLE_SEGMENT
     _make_segment_directories(segment, with_rows=False)
-    outcomes, active = _dedupe_kernels(plan, kernels)
+    outcomes, active = dedupe_kernels(plan, kernels)
     for outcome in outcomes:
         _write_dedupe(segment, outcome)
     for (a, b), radius in plan.pair_radius_arcsec.items():

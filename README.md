@@ -27,14 +27,14 @@ rows = crossmatch(
 
 # Contents of `rows`: the matched input row positions and their separation.
 # Separations are rounded here for display.
-# a/row_index | b/row_index | a__b/separation_arcsec
+# a/row_index | b/row_index | a+b/separation_arcsec
 #           0 |           0 |                   0.36
 
 # Replace row positions with your own IDs, supplied in the original row order.
 index = rows_to_ids(rows, {"a": [101, 102], "b": [201, 202]})
 
 # Contents of `index`: the same match, now labelled with catalogue IDs.
-# a/id | b/id | a__b/separation_arcsec
+# a/id | b/id | a+b/separation_arcsec
 #  101 |  201 |                   0.36
 ```
 

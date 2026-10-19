@@ -16,7 +16,7 @@ from astribidem import (
     resolve,
     segment_names,
 )
-from astribidem.banded import (
+from astribidem.out_of_core.banded import (
     as_chunks,
     build_band,
     build_edges_by_band,
@@ -26,7 +26,7 @@ from astribidem.banded import (
     write_band_layout,
 )
 
-FIXTURES = Path(__file__).with_name("fixtures")
+FIXTURES = Path(__file__).parents[1] / "fixtures"
 sys.path.insert(0, str(FIXTURES))
 from aion_parity_cases import (  # noqa: E402 — fixture path is set above
     DEDUPE_RADIUS_ARCSEC,
@@ -101,6 +101,7 @@ def test_band_build_reproduces_the_in_memory_edges(tmp_path, band_height_arcsec)
     assert_same_edges(read_edges(edges_directory), in_memory(CATALOGS, **SETTINGS))
 
 
+@pytest.mark.slow
 def test_band_tasks_can_run_in_separate_processes(tmp_path):
     single, parallel = tmp_path / "single", tmp_path / "parallel"
     directory = layout(tmp_path, CATALOGS, 5.0)

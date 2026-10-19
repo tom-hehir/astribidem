@@ -19,15 +19,17 @@ from astribidem import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
+    as_chunks,
     audit_edges,
     build_edges,
+    build_edges_by_band,
     build_edges_to_directory,
     crossmatch,
     read_edges,
     resolve,
+    write_band_layout,
     write_edges,
 )
-from astribidem.banded import as_chunks, build_edges_by_band, write_band_layout
 from astribidem.modes import entity_order
 
 FIXTURES = Path(__file__).with_name("fixtures")
@@ -119,9 +121,10 @@ def test_reproduces_aion_output(surveys, edge_sources, label, source):
         table = crossmatch(surveys, mode=mode(kind, arguments), **SETTINGS)
     else:
         table = resolve(edge_sources[source], mode(kind, arguments))
+    # AION-2 wrote a pair as a__b; astribidem writes a+b.
     expected = in_entity_order(
         {
-            key.removeprefix(f"{label}/"): value
+            key.removeprefix(f"{label}/").replace("__", "+"): value
             for key, value in EXPECTED.items()
             if key.startswith(f"{label}/")
         }

@@ -26,6 +26,14 @@ which is AION-2's rule, instead of Astral's lowest stable ID.
 `tests/test_aion_parity.py` compares the matching core with indexes recorded
 from AION-2; `tests/fixtures/generate_aion_parity.py` records them.
 
+## Kernel choice
+
+The cKDTree kernel was adopted on 2026-08-13 (AION-2 issue #188, moved here
+from astral-projections issue #8) after a head-to-head against the smatch C
+HEALPix engine: the dual-tree join was about 10 times faster at production
+density, chord separations avoid smatch's 0.05 arcsec `1 - cos` floor, and no
+GPL dependency is needed.
+
 ## Name
 
 The name joins Latin *astrum* ("star") and *ibidem* ("in the same place").

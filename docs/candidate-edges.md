@@ -63,7 +63,7 @@ edges-directory/
     │   ├── a.parquet            row, status, kept_row
     │   └── b.parquet
     └── edges/
-        └── a__b.parquet         row_a, row_b, separation_arcsec
+        └── a+b.parquet          row_a, row_b, separation_arcsec
 ```
 
 Each deduplication file lists only the rows that dedupe removed from matching.
@@ -75,8 +75,8 @@ Edges are sorted by `(row_a, row_b)`, and row numbers are global.
 A segment that covers only some rows also has a `rows/<survey>.parquet` file
 listing them; a segment without a `rows` directory covers every row.
 `read_segment(directory, name)` loads one segment, `segment_names(directory)`
-lists them, and `read_edges` loads every segment and combines them with
-`combine_segments`. Resolving segments separately gives the same entities as
+lists them, `read_edges_metadata(directory)` returns the saved settings, and
+`read_edges` loads every segment and combines them. Resolving segments separately gives the same entities as
 resolving them combined.
 
 ## Stream edges to disk
@@ -115,12 +115,14 @@ Resolution later loads all edges of the surveys it uses, but no coordinates.
 ## Build edges band by band
 
 When coordinates and KD-trees do not fit in memory, build the edges one
-declination band at a time. The build first streams every survey's
-coordinates into a layout grouped by band:
+declination band at a time. The result is the same as an in-memory build, but
+the layout and intermediate files cost time: on 20,000 rows per catalogue the
+banded route took four to six times as long. Use it only when the in-memory
+route does not fit. The build first streams every survey's coordinates into a
+layout grouped by band:
 
 ```python
-from astribidem import build_edges_by_band, write_band_layout
-from astribidem.banded import as_chunks
+from astribidem import as_chunks, build_edges_by_band, write_band_layout
 
 write_band_layout(
     "layout-directory",
@@ -172,8 +174,8 @@ sorts the per-segment indexes into the usual entity order: first present
 survey, then that survey's row. The file equals
 `resolve(read_edges(...), mode)`, metadata included.
 
-The sort runs in DuckDB, installed with the `large` extra
-(`astribidem[large]`). DuckDB spills to disk beyond `memory_limit`, such
+The sort runs in DuckDB, installed with the `out-of-core` extra
+(`astribidem[out-of-core]`). DuckDB spills to disk beyond `memory_limit`, such
 as `"4GB"`, using `threads` threads; when the limit is too small for the
 threads, the sort stops with a `MemoryError`. DuckDB could write the sorted
 index to Parquet itself, which is faster, but it would choose the column types

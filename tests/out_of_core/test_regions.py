@@ -11,11 +11,11 @@ from astribidem import (
     DegenerateCrossmatchConfig,
     EntitywiseCrossmatchConfig,
     build_edges,
-    combine_segments,
     resolve,
 )
+from astribidem.candidate_edges import combine_segments
 from astribidem.edges import edge_settings
-from astribidem.regions import (
+from astribidem.out_of_core.regions import (
     MARGIN_ABOVE,
     MARGIN_BELOW,
     OWNED,
@@ -25,7 +25,7 @@ from astribidem.regions import (
     finish_handover,
 )
 
-FIXTURES = Path(__file__).with_name("fixtures")
+FIXTURES = Path(__file__).parents[1] / "fixtures"
 sys.path.insert(0, str(FIXTURES))
 from aion_parity_cases import (  # noqa: E402 — fixture path is set above
     DEDUPE_RADIUS_ARCSEC,

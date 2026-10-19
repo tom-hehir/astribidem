@@ -19,6 +19,6 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - name: Install development tools
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --group dev
       - name: Run pre-commit
         run: uv run --no-sync pre-commit run --all-files

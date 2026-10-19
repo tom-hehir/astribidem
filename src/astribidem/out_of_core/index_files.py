@@ -8,7 +8,7 @@ the per-segment indexes are sorted into the global entity order: first
 present survey, then that survey's row. The result then equals
 ``resolve(read_edges(directory), mode)``, metadata included.
 
-The sort runs in DuckDB, the optional ``large`` dependency, which spills to
+The sort runs in DuckDB, the optional ``out-of-core`` dependency, which spills to
 disk beyond ``memory_limit``. DuckDB could write the sorted index to Parquet
 itself, which is faster, but it would choose the column types and drop the
 index metadata; its rows instead stream back a batch at a time and are written
@@ -26,7 +26,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from astribidem.api import resolve
-from astribidem.edge_files import read_segment, segment_names
+from astribidem.edge_files import read_edges, read_segment, segment_names
+from astribidem.index_table import DEDUPE_KEY, SUMMARY_KEY, encode_metadata
 from astribidem.modes import CrossmatchModeConfig
 
 _ROW_BITS = 40  # row numbers below 2**40; survey positions fill the bits above
@@ -58,11 +59,9 @@ def _merged(values: list, key: str | None = None):
 
 def _merged_metadata(metadatas: list[dict[bytes, bytes]]) -> dict[bytes, bytes]:
     merged = dict(metadatas[0])
-    for key in (b"astribidem.dedupe", b"astribidem.summary"):
+    for key in (DEDUPE_KEY, SUMMARY_KEY):
         combined = _merged([json.loads(metadata[key]) for metadata in metadatas])
-        merged[key] = json.dumps(
-            combined, sort_keys=True, separators=(",", ":"), allow_nan=False
-        ).encode()
+        merged[key] = encode_metadata(combined)
     return merged
 
 
@@ -80,7 +79,7 @@ def _sorted_batches(paths, schema, work: Path, memory_limit, threads):
         import duckdb
     except ImportError as exc:
         raise ImportError(
-            "sorting segments needs DuckDB: install astribidem[large]"
+            "sorting segments needs DuckDB: install astribidem[out-of-core]"
         ) from exc
     rows = [_quote(n) for n in schema.names if n.endswith("/row_index")]
     # The entity order: first present survey, then that survey's row.
@@ -132,6 +131,10 @@ def resolve_to_file(
     edges_directory = Path(edges_directory)
     index_path = Path(index_path)
     names = segment_names(edges_directory)
+    if not names:
+        # Edges built from catalogues with no rows: write the empty index.
+        pq.write_table(resolve(read_edges(edges_directory), mode), index_path)
+        return
     work = index_path.with_name(f".{index_path.name}.segments")
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
@@ -139,7 +142,7 @@ def resolve_to_file(
         paths = [work / f"{name}.parquet" for name in names]
         tasks = [
             (str(edges_directory), name, mode, str(path))
-            for name, path in zip(names, paths)
+            for name, path in zip(names, paths, strict=True)
         ]
         if processes > 1:
             with ProcessPoolExecutor(processes) as pool:

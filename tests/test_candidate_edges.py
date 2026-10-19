@@ -41,7 +41,7 @@ SETTINGS = {
 
 def assert_same_edges(left, right):
     assert left.survey_names == right.survey_names
-    for x, y in zip(left.surveys, right.surveys):
+    for x, y in zip(left.surveys, right.surveys, strict=True):
         assert (x.name, x.n_rows, x.dedupe_radius_arcsec) == (
             y.name,
             y.n_rows,
@@ -74,12 +74,7 @@ def test_resolving_built_edges_equals_crossmatch():
 
 def test_saved_files_hold_rows_dedupe_outcomes_and_settings(tmp_path):
     write_edges(build_edges(SURVEYS, **SETTINGS), tmp_path)
-    from astribidem import __version__
-
     assert json.loads((tmp_path / "metadata.json").read_text()) == {
-        "format": "astribidem.edges",
-        "format_version": 1,
-        "astribidem_version": __version__,
         "surveys": [
             {"name": "a", "n_rows": 7, "dedupe_radius_arcsec": 0.5},
             {"name": "b", "n_rows": 4, "dedupe_radius_arcsec": 0.0},
@@ -101,7 +96,7 @@ def test_saved_files_hold_rows_dedupe_outcomes_and_settings(tmp_path):
         "kept_row": [0, 0, None, None, None],
     }
     assert pq.read_table(segment / "deduplication" / "b.parquet").num_rows == 0
-    edges = pq.read_table(segment / "edges" / "a__b.parquet")
+    edges = pq.read_table(segment / "edges" / "a+b.parquet")
     assert edges.column_names == ["row_a", "row_b", "separation_arcsec"]
     assert edges["row_a"].to_pylist() == [0, 6]
     assert edges["row_b"].to_pylist() == [0, 2]
@@ -147,7 +142,7 @@ def test_chunk_stream_concatenates_to_the_complete_join():
     chunks = list(a.all_pairs_chunks(b, 5.0, workers=3, chunk_rows=37))
     assert len(chunks) == 11
     joined = [np.concatenate([chunk[k] for chunk in chunks]) for k in range(3)]
-    for part, whole in zip(joined, a.all_pairs(b, 5.0)):
+    for part, whole in zip(joined, a.all_pairs(b, 5.0), strict=True):
         np.testing.assert_array_equal(part, whole)
 
 
@@ -171,22 +166,14 @@ def test_chunk_stream_keeps_at_most_workers_chunks_in_flight(monkeypatch):
     assert len(rest) == 39 and len(started) == 40
 
 
-def test_writers_refuse_colliding_pair_file_names(tmp_path):
-    surveys = {
-        "a__b": survey([0]),
-        "c": survey([0]),
-        "a": survey([0]),
-        "b__c": survey([0]),
-    }
-    settings = {
-        "radius_arcsec": 1.0,
-        "dedupe_radius_arcsec": 0.0,
-        "dedupe_radius_arcsec_overrides": {name: 0.0 for name in surveys},
-    }
-    with pytest.raises(ValueError, match="share an edge file name"):
-        write_edges(build_edges(surveys, **settings), tmp_path)
-    with pytest.raises(ValueError, match="share an edge file name"):
-        build_edges_to_directory(surveys, tmp_path, **settings)
+@pytest.mark.parametrize("name", ["a+b", "a/b", ""])
+def test_survey_names_that_would_break_column_or_file_names_are_refused(name):
+    with pytest.raises(ValueError, match="survey names"):
+        build_edges(
+            {name: survey([0]), "c": survey([0])},
+            radius_arcsec=1.0,
+            dedupe_radius_arcsec=0.0,
+        )
 
 
 def restrict(edges, rows_by_survey):
@@ -237,18 +224,18 @@ PATCH_ROWS = [
 def test_combined_segments_equal_the_whole_build():
     edges = build_edges(PATCHES, **SETTINGS)
     segments = [restrict(edges, rows) for rows in PATCH_ROWS]
-    from astribidem import combine_segments
+    from astribidem.candidate_edges import combine_segments
 
     assert_same_edges(combine_segments(segments), edges)
 
 
 def test_segments_save_their_rows_and_reload(tmp_path):
-    from astribidem import read_segment, segment_names, write_segment
-    from astribidem.edge_files import write_metadata
+    from astribidem import read_segment, segment_names
+    from astribidem.edge_files import write_metadata, write_segment
 
     edges = build_edges(PATCHES, **SETTINGS)
     segments = [restrict(edges, rows) for rows in PATCH_ROWS]
-    for name, segment in zip(["band-0", "band-1"], segments):
+    for name, segment in zip(["band-0", "band-1"], segments, strict=True):
         write_segment(tmp_path, name, segment)
     write_metadata(
         tmp_path,

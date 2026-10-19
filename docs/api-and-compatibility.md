@@ -14,19 +14,19 @@ Names explicitly exported from `astribidem` are the supported alpha interface.
 | --- | --- |
 | Match positions | `crossmatch` with a mapping of names to `(ra, dec)` tuples |
 | Choose association policy | `DegenerateCrossmatchConfig`, `EntitywiseCrossmatchConfig`, `EntitySelectionConfig`, `CrossmatchModeConfig` |
+| Apply a pair policy to candidate pairs you found yourself | `one_to_one_pairs` (with `CatalogKernel.all_pairs`) |
 | Match shared identifiers | `match_uids`, `match_hub_and_spoke`, `UIDLink`, `SpatialLink` |
-| Use results | `rows_to_ids`, `index_summary` |
+| Use results | `rows_to_ids`, `ids_to_rows`, `index_summary` |
 | Reuse candidate searches | `build_edges`, `resolve`, `audit_edges`, `CandidateEdges`, `PairEdges`, `DedupeOutcome` |
-| Save candidate searches | `write_edges`, `read_edges`, `build_edges_to_directory` |
-| Build and resolve large catalogues | `write_band_layout`, `build_edges_by_band`, `resolve_to_file` |
-| Coordinate separate workers | `prepare_band_build`, `build_band`, `sweep_boundaries`, `read_segment`, `write_segment`, `segment_names`, `combine_segments` |
+| Save candidate searches | `write_edges`, `read_edges`, `read_edges_metadata`, `build_edges_to_directory` |
+| Build and resolve catalogues larger than memory | `write_band_layout`, `as_chunks`, `build_edges_by_band`, `resolve_to_file` |
+| Coordinate separate workers | `prepare_band_build`, `build_band`, `sweep_boundaries`, `read_segment`, `segment_names` |
 | Query the geometric kernel | `CatalogKernel` |
 | Inspect the installed release | `__version__` |
 
 The worker/segment and kernel interfaces are advanced and may evolve during
 alpha. Use the high-level functions unless you need their explicit controls.
-The documented `astribidem.geometry` array adapter and
-`astribidem.banded.as_chunks` helper are also available. Other module helpers,
+Other module helpers,
 underscore-prefixed names and intermediate files are implementation details.
 
 ## Coordinate and radius inputs
@@ -47,8 +47,9 @@ settings have the same scientific metadata.
 
 Banded builds use the same radius arguments. `match_hub_and_spoke` uses the
 same dedupe default/overrides for spatial participants, while each `SpatialLink`
-sets its matching radius. It accepts Arrow tables; `match_uids` accepts a
-mapping of names to identifier arrays.
+sets its matching radius. It takes the same `(ra, dec)` mapping as `crossmatch`
+for spatial participants, and the same mapping of names to identifier arrays as
+`match_uids` for UID participants.
 
 Every matching call is self-contained. RA/Dec becomes XYZ at kernel
 construction, once per survey in an in-memory build or once per loaded region
@@ -73,32 +74,26 @@ outer-join keys in remaining source/input order. Hub-and-spoke follows anchor
 order. UID and hub-and-spoke results also contain a consecutive `entity_id`;
 it is not a persistent identifier across independently rebuilt inputs.
 
-`rows_to_ids` preserves Arrow types, null membership and schema metadata. It
-does not validate caller IDs for uniqueness or scientific meaning. Supply one
+`rows_to_ids` preserves Arrow types, null membership and schema metadata.
+Each ID column is named `<survey>/id` unless `id_columns` gives another whole
+column name (`{"s": "s/objid"}` writes column `s/objid`). It does not validate
+caller IDs for uniqueness or scientific meaning. Supply one
 ID per original input row in the same order. A saved row index alone cannot
 identify a reordered catalogue: retain the source revision and row-order
 provenance alongside it, or map to your own persistent IDs.
 
-## Saved formats
+`ids_to_rows` is the inverse: it turns a match table's ID columns back into
+row positions, given the same per-row IDs, which must then be unique and
+non-null. It takes the same `id_columns`, so one mapping converts both ways
+and match tables built elsewhere, with columns such as `key`, can be read; an
+ID missing from the lookup raises instead of becoming null.
 
-Package versions and saved-format versions are independent. Format version 1
-is introduced with `0.0.0a0`:
+## Saved files
 
-- Index tables carry `astribidem.index_format_version` and `astribidem.version`
-  in Arrow schema metadata. Parquet preserves them, along with matching policy,
-  dedupe outcomes and summaries where those apply.
-- Saved edge `metadata.json`, band `layout.json` and `band-build.json` carry
-  `format`, integer `format_version`, and `astribidem_version` fields.
-- Edge/layout/worker readers reject missing or unsupported format versions
-  before interpreting their files. `index_summary` checks the index format
-  version before reading a spatial summary.
+Index tables carry their matching settings, dedupe outcomes and summary in
+Arrow schema metadata, which Parquet preserves. Saved edge `metadata.json`,
+band `layout.json` and `band-build.json` hold the settings their readers need.
 
-Plain `pyarrow.parquet.read_table` remains a general-purpose loader and does
-not enforce astribidem compatibility. `rows_to_ids` is also usable with caller
-constructed row tables. Consumers interpreting saved index metadata should
-check the format version explicitly. Reading data with Arrow does not imply
-that its matching semantics are compatible with a newer package.
-
-Breaking storage changes will increment the format version and be documented;
-alpha releases need not provide migration readers. A producer package version
-is provenance, not by itself a compatibility check.
+Saved files carry no format or package version, and readers do not check one.
+A release that changes a saved layout says so in the changelog; rebuild the
+files with that release rather than reading older ones.

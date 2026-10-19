@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Mapping
 from itertools import combinations
 
@@ -11,10 +10,16 @@ import pyarrow.compute as pc
 from numpy.typing import ArrayLike
 
 from astribidem.candidate_edges import CandidateEdges
-from astribidem.edges import _build_prepared_edges, _prepare_edge_build
+from astribidem.edges import build_prepared_edges, prepare_edge_build
+from astribidem.index_table import (
+    DEDUPE_KEY,
+    RESOLVED_CONFIG_KEY,
+    encode_metadata,
+    row_column,
+)
 from astribidem.kernel import resolve_workers
 from astribidem.modes import CrossmatchModeConfig, mode_to_mapping
-from astribidem.uids import _as_arrow
+from astribidem.uids import as_arrow
 
 
 def _required_pairs(
@@ -26,8 +31,6 @@ def _required_pairs(
 
 def _check_mode_fits_edges(mode: CrossmatchModeConfig, edges: CandidateEdges) -> None:
     """Fail loudly when the edges cannot answer the mode's question."""
-    if not isinstance(mode, CrossmatchModeConfig):
-        raise TypeError("mode must be a CrossmatchModeConfig")
     unknown = set(mode.required_surveys()) - set(edges.survey_names)
     if unknown:
         raise ValueError(f"mode names unknown surveys: {sorted(unknown)}")
@@ -42,7 +45,7 @@ def _check_mode_fits_edges(mode: CrossmatchModeConfig, edges: CandidateEdges) ->
 def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
     """Resolve candidate edges into one row-position index.
 
-    ``mode`` selects an Astral-derived subset join or exactly-once entity
+    ``mode`` selects a subset join or exactly-once entity
     resolution. A degenerate mode reads only its own surveys' pairs, so it
     can use edges built for more surveys; an entitywise mode uses every
     survey in the edges. Entity selection is applied only after all surveys
@@ -83,17 +86,13 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
         for survey in edges.surveys
     }
     metadata = dict(table.schema.metadata or {})
-    metadata[b"astribidem.resolved_config"] = json.dumps(
-        provenance, sort_keys=True, separators=(",", ":"), allow_nan=False
-    ).encode()
-    metadata[b"astribidem.dedupe"] = json.dumps(
-        outcomes, sort_keys=True, separators=(",", ":"), allow_nan=False
-    ).encode()
+    metadata[RESOLVED_CONFIG_KEY] = encode_metadata(provenance)
+    metadata[DEDUPE_KEY] = encode_metadata(outcomes)
     return table.replace_schema_metadata(metadata)
 
 
 def crossmatch(
-    surveys: Mapping[str, tuple[ArrayLike, ArrayLike]],
+    coordinates: Mapping[str, tuple[ArrayLike, ArrayLike]],
     *,
     radius_arcsec: float,
     dedupe_radius_arcsec: float,
@@ -110,25 +109,18 @@ def crossmatch(
     for the matching settings and ``resolve`` for the result. No payloads are
     read and nothing is saved.
     """
-    if not isinstance(mode, CrossmatchModeConfig):
-        raise TypeError("mode must be a CrossmatchModeConfig")
-    if not isinstance(surveys, Mapping) or not surveys:
-        raise ValueError("surveys must map at least one name to an (ra, dec) tuple")
-    names = tuple(surveys)
-    unknown = set(mode.required_surveys()) - set(names)
-    if unknown:
-        raise ValueError(f"mode names unknown surveys: {sorted(unknown)}")
+    names = tuple(coordinates)
     workers = resolve_workers(workers)
-    settings, kernels = _prepare_edge_build(
-        surveys,
+    settings, kernels = prepare_edge_build(
+        coordinates,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
         radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=None if mode.requires_all_surveys() else _required_pairs(mode, names),
     )
-    del surveys
-    edges = _build_prepared_edges(settings, kernels, workers=workers)
+    del coordinates
+    edges = build_prepared_edges(settings, kernels, workers=workers)
     del kernels
     return resolve(edges, mode)
 
@@ -144,16 +136,73 @@ def rows_to_ids(
     Each named survey's row column is used to index ``ids[survey]``, which
     holds one ID per input row in input order (the coordinates passed to the
     edge build, or the UIDs passed to ``match_uids``). The result replaces the
-    row column in place as ``<survey>/<id column>`` (default ``id``); null
-    rows stay null. Surveys not named in ``ids`` keep their row column. The
-    IDs are not checked.
+    row column in place, named ``<survey>/id`` unless ``id_columns`` gives
+    another column name; null rows stay null. Surveys not named in ``ids``
+    keep their row column. The IDs are not checked.
     """
     id_columns = id_columns or {}
+    unknown = set(id_columns) - set(ids)
+    if unknown:
+        raise ValueError(f"id_columns names surveys not in ids: {sorted(unknown)}")
     for survey, values in ids.items():
-        row_column = f"{survey}/row_index"
+        rows = row_column(survey)
         table = table.set_column(
-            table.column_names.index(row_column),
-            f"{survey}/{id_columns.get(survey, 'id')}",
-            pc.take(_as_arrow(values, name=survey, kind="IDs"), table[row_column]),
+            table.column_names.index(rows),
+            id_columns.get(survey, f"{survey}/id"),
+            pc.take(as_arrow(values, name=survey, kind="IDs"), table[rows]),
         )
     return table
+
+
+def ids_to_rows(
+    matches: pa.Table,
+    ids: Mapping[str, object],
+    *,
+    id_columns: Mapping[str, str] | None = None,
+) -> pa.Table:
+    """Replace each survey's ID column of a match table by its row positions.
+
+    The inverse of ``rows_to_ids``. Each survey's ID column, ``<survey>/id``
+    unless ``id_columns`` gives another column name, is looked up in
+    ``ids[survey]``, which holds one ID per input row in input order, and
+    becomes ``<survey>/row_index``. Null IDs stay null. Surveys not named in
+    ``ids``, and surveys whose default ID column is absent, are left as they
+    are; a survey named in ``id_columns`` must have that column. Integer IDs
+    of different widths, and string IDs of either string type, are compared
+    after casting the table's IDs to the type of ``ids[survey]``.
+
+    Raises:
+        ValueError: ``ids[survey]`` holds a duplicate or null ID, which would
+            make the lookup ambiguous; or the table holds an ID missing from
+            ``ids[survey]``, which would otherwise become a null row.
+    """
+    id_columns = id_columns or {}
+    unknown = set(id_columns) - set(ids)
+    if unknown:
+        raise ValueError(f"id_columns names surveys not in ids: {sorted(unknown)}")
+    for survey, values in ids.items():
+        column = id_columns.get(survey, f"{survey}/id")
+        if column not in matches.column_names:
+            if survey in id_columns:
+                raise ValueError(f"match table has no ID column {column!r}")
+            continue
+        lookup = as_arrow(values, name=survey, kind="IDs")
+        # count_distinct skips nulls, so a null lookup ID also fails here.
+        if pc.count_distinct(lookup).as_py() != len(lookup):
+            raise ValueError(f"ids[{survey!r}] must hold unique, non-null IDs")
+        table_ids = matches[column]
+        if table_ids.type != lookup.type:
+            table_ids = pc.cast(table_ids, lookup.type)
+        positions = pc.index_in(table_ids, value_set=lookup)
+        missing = pc.and_(pc.is_valid(table_ids), pc.is_null(positions))
+        if pc.any(missing).as_py():
+            examples = pc.filter(table_ids, missing).slice(0, 5).to_pylist()
+            raise ValueError(
+                f"match table holds IDs missing from ids[{survey!r}]: {examples}"
+            )
+        matches = matches.set_column(
+            matches.column_names.index(column),
+            row_column(survey),
+            pc.cast(positions, pa.int64()),
+        )
+    return matches

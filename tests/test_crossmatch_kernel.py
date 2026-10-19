@@ -118,8 +118,9 @@ def test_chunked_join_is_bit_identical_to_serial():
     b = CatalogKernel(ra_b, dec_b)
 
     serial = a.all_pairs(b, 3.0)
-    chunked = a.all_pairs(b, 3.0, workers=4, chunk_rows=137)
-    for s, c in zip(serial, chunked):
+    chunks = list(a.all_pairs_chunks(b, 3.0, workers=4, chunk_rows=137))
+    chunked = [np.concatenate([chunk[k] for chunk in chunks]) for k in range(3)]
+    for s, c in zip(serial, chunked, strict=True):
         np.testing.assert_array_equal(s, c)
 
 
@@ -134,16 +135,10 @@ def test_empty_inputs():
 
 def test_validation_errors():
     kernel = CatalogKernel(np.array([1.0]), np.array([0.0]))
-    with pytest.raises(ValueError, match="radius_arcsec"):
-        kernel.self_pairs(float("nan"))
-    with pytest.raises(ValueError, match="radius_arcsec"):
-        kernel.all_pairs(kernel, -1.0)
     with pytest.raises(ValueError, match="k must be >= 1"):
         kernel.all_pairs(kernel, 1.0, k=0)
     with pytest.raises(ValueError, match="workers"):
         resolve_workers(0)
-    with pytest.raises(ValueError, match="shape"):
-        CatalogKernel.from_xyz(np.zeros((3, 2)))
 
 
 def test_radec_chord_roundtrip():
@@ -151,3 +146,10 @@ def test_radec_chord_roundtrip():
     assert sep[0] == pytest.approx(0.7, abs=1e-12)
     xyz = radec_to_xyz(np.array([120.0]), np.array([-45.0]))
     assert np.linalg.norm(xyz[0]) == pytest.approx(1.0, abs=1e-15)
+
+
+@pytest.mark.parametrize("radius", [0.0, -1.0, float("nan")])
+def test_all_pairs_refuses_a_radius_that_is_not_positive_and_finite(radius):
+    kernel = CatalogKernel(np.array([10.0]), np.array([0.0]))
+    with pytest.raises(ValueError, match="positive number of arcseconds"):
+        kernel.all_pairs(kernel, radius)

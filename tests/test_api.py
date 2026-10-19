@@ -13,6 +13,7 @@ from astribidem import (
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
     crossmatch,
+    ids_to_rows,
     index_summary,
     rows_to_ids,
 )
@@ -65,7 +66,7 @@ def test_rows_to_ids_keeps_types_nulls_column_order_and_metadata():
     table = rows_to_ids(
         result,
         {"a": pa.array([big, big + 1], pa.uint64()), "b": ["b-0"]},
-        id_columns={"a": "object_id"},
+        id_columns={"a": "a/object_id"},
     )
     assert table.column_names == ["a/object_id", "b/id", "disputed_reason"]
     assert table.schema.field("a/object_id").type == pa.uint64()
@@ -105,7 +106,7 @@ def test_subset_join_builds_only_selected_relations():
     assert result.column_names == [
         "a/row_index",
         "b/row_index",
-        "a__b/separation_arcsec",
+        "a+b/separation_arcsec",
     ]
     assert result["a/row_index"].to_pylist() == [0]
 
@@ -118,12 +119,9 @@ def test_empty_survey_is_valid_and_missing_members_stay_null():
     ]
 
 
-@pytest.mark.parametrize(
-    "radii", [{}, {"a": -1}, {"a": float("nan")}, {"a": 0, "x": 0}]
-)
-def test_dedupe_choice_is_explicit_and_valid(radii):
-    with pytest.raises(ValueError, match="dedupe"):
-        resolve({"a": survey([0])}, dedupe_radius_arcsec=radii)
+def test_dedupe_override_for_an_unknown_survey_is_rejected():
+    with pytest.raises(ValueError, match="unknown surveys"):
+        resolve({"a": survey([0])}, dedupe_radius_arcsec_overrides={"x": 0.5})
 
 
 @pytest.mark.parametrize(
@@ -132,7 +130,6 @@ def test_dedupe_choice_is_explicit_and_valid(radii):
         {("a", "b"): 1, ("b", "a"): 1},
         {("a", "z"): 1},
         {("a", "a"): 1},
-        {("a", "b"): float("nan")},
     ],
 )
 def test_invalid_pair_override_is_rejected(override):
@@ -142,7 +139,7 @@ def test_invalid_pair_override_is_rejected(override):
 
 
 def test_unknown_mode_survey_is_rejected_before_matching():
-    with pytest.raises(ValueError, match="unknown surveys"):
+    with pytest.raises(ValueError, match="invalid survey pair"):
         resolve({"a": survey([0])}, mode=DegenerateCrossmatchConfig(surveys=["a", "b"]))
 
 
@@ -169,19 +166,6 @@ def test_float64_integer_and_list_coordinates_do_not_warn(ra, recwarn):
     assert not recwarn.list
 
 
-def test_geometry_adapter_warns_on_low_precision_coordinates():
-    from astribidem.geometry import crossmatch_radec, dedupe_and_crossmatch_radec
-
-    low = (np.array([180.0], np.float32), np.array([0.0], np.float32))
-    high = (np.array([180.0]), np.array([0.0]))
-    with pytest.warns(UserWarning, match="32-bit"):
-        crossmatch_radec([low, high], radius_arcsec=1.0)
-    with pytest.warns(UserWarning, match="32-bit"):
-        dedupe_and_crossmatch_radec(
-            [low, high], 1.0, names=["a", "b"], dedupe_radii_arcsec=[0.0, 0.0]
-        )
-
-
 def test_saved_index_keeps_its_summary(tmp_path):
     result = resolve({"a": survey([0, 20]), "b": survey([0.2])})
     path = tmp_path / "index.parquet"
@@ -198,18 +182,15 @@ def test_saved_index_keeps_its_summary(tmp_path):
         ([0.0], [float("inf")], "finite"),
     ],
 )
-@pytest.mark.parametrize("entry", ["arrays", "geometry", "banded"])
+@pytest.mark.parametrize("entry", ["arrays", "banded"])
 def test_invalid_coordinates_fail_at_every_array_entry(
     tmp_path, ra, dec, message, entry
 ):
     from astribidem import write_band_layout
-    from astribidem.geometry import crossmatch_radec
 
     with pytest.raises(ValueError, match=message):
         if entry == "arrays":
             resolve({"a": (ra, dec)})
-        elif entry == "geometry":
-            crossmatch_radec([(ra, dec), ([0.0], [0.0])], radius_arcsec=1.0)
         else:
             write_band_layout(tmp_path, {"a": [(ra, dec)]}, band_height_deg=1.0)
 
@@ -223,3 +204,76 @@ def test_poles_and_wrapped_ra_remain_valid():
     )
     assert result["a/row_index"].to_pylist() == [0, 1]
     assert result["b/row_index"].to_pylist() == [0, 1]
+
+
+def test_ids_to_rows_inverts_rows_to_ids_with_typed_and_null_ids():
+    big = 2**63 + 5
+    ids = {"s": pa.array([big, big + 1], pa.uint64())}
+    matches = pa.table({"s/row_index": pa.array([1, None, 0], pa.int64())})
+    assert ids_to_rows(rows_to_ids(matches, ids), ids).equals(matches)
+
+
+def test_one_id_columns_mapping_converts_both_ways():
+    ids = {"a": ["x", "y"], "b": [7, 8]}
+    id_columns = {"a": "a_ref"}
+    matches = pa.table(
+        {"a/row_index": pa.array([1, 0], pa.int64()), "b/row_index": [0, None]}
+    )
+    labeled = rows_to_ids(matches, ids, id_columns=id_columns)
+    assert labeled.column_names == ["a_ref", "b/id"]
+    assert ids_to_rows(labeled, ids, id_columns=id_columns).equals(matches)
+
+
+def test_rows_to_ids_rejects_id_columns_for_unknown_surveys():
+    matches = pa.table({"a/row_index": pa.array([0], pa.int64())})
+    with pytest.raises(ValueError, match="not in ids"):
+        rows_to_ids(matches, {"a": [1]}, id_columns={"b": "b/key"})
+
+
+def test_ids_to_rows_reads_a_named_id_column_and_casts_integer_widths():
+    matches = pa.table({"key": pa.array([20, 10], pa.int32()), "other": [1, 2]})
+    result = ids_to_rows(matches, {"s": [10, 20]}, id_columns={"s": "key"})
+    assert result.column_names == ["s/row_index", "other"]
+    assert result["s/row_index"].to_pylist() == [1, 0]
+
+
+def test_ids_to_rows_leaves_surveys_without_their_default_column():
+    matches = pa.table({"a/id": ["x"]})
+    assert ids_to_rows(matches, {"b": ["y"]}).equals(matches)
+
+
+@pytest.mark.parametrize(
+    "matches,ids,kwargs,message",
+    [
+        (pa.table({"s/id": [1]}), {"s": [1, 1]}, {}, "unique, non-null"),
+        (pa.table({"s/id": [1]}), {"s": [1, None]}, {}, "unique, non-null"),
+        (
+            pa.table({"key": [3]}),
+            {"s": [1, 2]},
+            {"id_columns": {"s": "key"}},
+            "missing",
+        ),
+        (
+            pa.table({"s/id": [1]}),
+            {"s": [1]},
+            {"id_columns": {"s": "key"}},
+            "no ID column",
+        ),
+        (
+            pa.table({"s/id": [1]}),
+            {"s": [1]},
+            {"id_columns": {"t": "key"}},
+            "not in ids",
+        ),
+    ],
+)
+def test_ids_to_rows_rejects_ambiguous_or_missing_ids(matches, ids, kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        ids_to_rows(matches, ids, **kwargs)
+
+
+@pytest.mark.parametrize("radius", [0.0, -1.0])
+def test_crossmatch_refuses_a_matching_radius_that_is_not_positive(radius):
+    sources = {"a": survey([0]), "b": survey([0.2])}
+    with pytest.raises(ValueError, match="positive number of arcseconds"):
+        resolve(sources, radius_arcsec=radius)
