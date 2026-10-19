@@ -142,8 +142,6 @@ def test_validation_errors():
         kernel.all_pairs(kernel, 1.0, k=0)
     with pytest.raises(ValueError, match="workers"):
         resolve_workers(0)
-    with pytest.raises(ValueError, match="shape"):
-        CatalogKernel.from_xyz(np.zeros((3, 2)))
 
 
 def test_radec_chord_roundtrip():

@@ -14,6 +14,7 @@ Names explicitly exported from `astribidem` are the supported alpha interface.
 | --- | --- |
 | Match positions | `crossmatch` with a mapping of names to `(ra, dec)` tuples |
 | Choose association policy | `DegenerateCrossmatchConfig`, `EntitywiseCrossmatchConfig`, `EntitySelectionConfig`, `CrossmatchModeConfig` |
+| Apply a pair policy to candidate pairs you found yourself | `one_to_one_pairs` (with `CatalogKernel.all_pairs`) |
 | Match shared identifiers | `match_uids`, `match_hub_and_spoke`, `UIDLink`, `SpatialLink` |
 | Use results | `rows_to_ids`, `index_summary` |
 | Reuse candidate searches | `build_edges`, `resolve`, `audit_edges`, `CandidateEdges`, `PairEdges`, `DedupeOutcome` |
@@ -25,8 +26,7 @@ Names explicitly exported from `astribidem` are the supported alpha interface.
 
 The worker/segment and kernel interfaces are advanced and may evolve during
 alpha. Use the high-level functions unless you need their explicit controls.
-The documented `astribidem.geometry` array adapter and
-`astribidem.banded.as_chunks` helper are also available. Other module helpers,
+The `astribidem.banded.as_chunks` helper is also available. Other module helpers,
 underscore-prefixed names and intermediate files are implementation details.
 
 ## Coordinate and radius inputs

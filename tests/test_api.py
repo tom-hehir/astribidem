@@ -169,19 +169,6 @@ def test_float64_integer_and_list_coordinates_do_not_warn(ra, recwarn):
     assert not recwarn.list
 
 
-def test_geometry_adapter_warns_on_low_precision_coordinates():
-    from astribidem.geometry import crossmatch_radec, dedupe_and_crossmatch_radec
-
-    low = (np.array([180.0], np.float32), np.array([0.0], np.float32))
-    high = (np.array([180.0]), np.array([0.0]))
-    with pytest.warns(UserWarning, match="32-bit"):
-        crossmatch_radec([low, high], radius_arcsec=1.0)
-    with pytest.warns(UserWarning, match="32-bit"):
-        dedupe_and_crossmatch_radec(
-            [low, high], 1.0, names=["a", "b"], dedupe_radii_arcsec=[0.0, 0.0]
-        )
-
-
 def test_saved_index_keeps_its_summary(tmp_path):
     result = resolve({"a": survey([0, 20]), "b": survey([0.2])})
     path = tmp_path / "index.parquet"
@@ -198,18 +185,15 @@ def test_saved_index_keeps_its_summary(tmp_path):
         ([0.0], [float("inf")], "finite"),
     ],
 )
-@pytest.mark.parametrize("entry", ["arrays", "geometry", "banded"])
+@pytest.mark.parametrize("entry", ["arrays", "banded"])
 def test_invalid_coordinates_fail_at_every_array_entry(
     tmp_path, ra, dec, message, entry
 ):
     from astribidem import write_band_layout
-    from astribidem.geometry import crossmatch_radec
 
     with pytest.raises(ValueError, match=message):
         if entry == "arrays":
             resolve({"a": (ra, dec)})
-        elif entry == "geometry":
-            crossmatch_radec([(ra, dec), ([0.0], [0.0])], radius_arcsec=1.0)
         else:
             write_band_layout(tmp_path, {"a": [(ra, dec)]}, band_height_deg=1.0)
 

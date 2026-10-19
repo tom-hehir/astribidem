@@ -94,9 +94,7 @@ API emits no separation columns.
 The main `crossmatch` API retains its richer spatial strategies, including
 N-source all-pairs subset joins and entitywise `refuse`, `sequential` and
 `split` resolution. These are not applied across the independent hub-and-spoke
-links. The lower-level `geometry.crossmatch_radec` adapter also supports
-`matching_topology="anchor-pairs"` with complete matches, returning positional
-arrays instead of an Arrow table.
+links.
 
 ## Memory and execution
 

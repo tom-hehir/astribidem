@@ -35,6 +35,7 @@ from astribidem.modes import (
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
     index_summary,
+    one_to_one_pairs,
 )
 from astribidem.uids import match_uids
 
@@ -62,6 +63,7 @@ __all__ = [
     "index_summary",
     "match_hub_and_spoke",
     "match_uids",
+    "one_to_one_pairs",
     "prepare_band_build",
     "read_edges",
     "read_segment",

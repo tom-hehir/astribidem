@@ -166,20 +166,7 @@ class CatalogKernel:
         ra_shape, dec_shape = np.shape(ra), np.shape(dec)
         if len(ra_shape) != 1 or len(dec_shape) != 1 or ra_shape != dec_shape:
             raise ValueError("ra/dec must be aligned 1-D arrays")
-        self._init_from_xyz(radec_to_xyz(ra, dec, name=name))
-
-    @classmethod
-    def from_xyz(cls, xyz: np.ndarray) -> CatalogKernel:
-        """Build from ``(n, 3)`` unit vectors already on the sphere."""
-        xyz = np.asarray(xyz, dtype=np.float64)
-        if xyz.ndim != 2 or xyz.shape[1] != 3:
-            raise ValueError(f"xyz must have shape (n, 3), got {xyz.shape}")
-        kernel = cls.__new__(cls)
-        kernel._init_from_xyz(xyz)
-        return kernel
-
-    def _init_from_xyz(self, xyz: np.ndarray) -> None:
-        self.xyz = xyz
+        self.xyz = radec_to_xyz(ra, dec, name=name)
         self.tree = cKDTree(self.xyz, compact_nodes=True, balanced_tree=True)
 
     def __len__(self) -> int:

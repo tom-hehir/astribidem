@@ -1,12 +1,16 @@
-"""Random-catalog fixtures and helpers for crossmatch tests.
-
-Centralizes random catalog construction so the regime parametrization is
-shared across the correctness, N-way, and edge-case test files.
-"""
+"""Random catalogues, astribidem calls in the reference's shape, and comparison."""
 
 from __future__ import annotations
 
 import numpy as np
+import pyarrow as pa
+
+from astribidem import (
+    DegenerateCrossmatchConfig,
+    SpatialLink,
+    crossmatch,
+    match_hub_and_spoke,
+)
 
 CoordPair = tuple[np.ndarray, np.ndarray]
 
@@ -104,9 +108,8 @@ def make_disjoint_catalogs(
 def assert_groups_equal_as_sets(actual: np.ndarray, expected: np.ndarray) -> None:
     """Compare two ``(k, m)`` group arrays as unordered sets of column tuples.
 
-    The Astral implementation and the astropy reference may legitimately
-    return groups in different orders, so we compare the *sets* of groups
-    rather than asserting strict array equality.
+    astribidem and the astropy reference may return groups in different
+    orders, so the sets of groups are compared.
     """
     if actual.size == 0 and expected.size == 0:
         return
@@ -129,3 +132,38 @@ def assert_groups_equal_as_sets(actual: np.ndarray, expected: np.ndarray) -> Non
             f"  Only in expected: {sorted(only_expected)[:10]}"
             f"{' (truncated)' if len(only_expected) > 10 else ''}"
         )
+
+
+def _groups(index: pa.Table, names: list[str]) -> np.ndarray:
+    if index.num_rows == 0:
+        return np.empty((len(names), 0), dtype=np.int64)
+    return np.stack([index[f"{name}/row_index"].to_numpy() for name in names])
+
+
+def anchored_nearest(coords, radius_arcsec: float) -> np.ndarray:
+    """Hub-and-spoke ``anchored_nearest`` from catalogue 0, dedupe disabled."""
+    names = [f"catalog{i}" for i in range(len(coords))]
+    index = match_hub_and_spoke(
+        {
+            name: pa.table({"ra": ra, "dec": dec})
+            for name, (ra, dec) in zip(names, coords)
+        },
+        anchor=names[0],
+        links={
+            name: SpatialLink(radius_arcsec, "anchored_nearest") for name in names[1:]
+        },
+        dedupe_radius_arcsec=0.0,
+    )
+    return _groups(index, names)
+
+
+def mutual_nearest(coords, radius_arcsec: float) -> np.ndarray:
+    """A ``mutual_nearest`` subset join over every catalogue, dedupe disabled."""
+    names = [f"catalog{i}" for i in range(len(coords))]
+    index = crossmatch(
+        dict(zip(names, coords)),
+        radius_arcsec=radius_arcsec,
+        dedupe_radius_arcsec=0.0,
+        mode=DegenerateCrossmatchConfig(surveys=names, policy="mutual_nearest"),
+    )
+    return _groups(index, names)
