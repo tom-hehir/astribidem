@@ -15,8 +15,6 @@ use the [documentation](../docs/README.md) for supported behavior.
 
 - [UID implementation decisions](uid-matching-implementation.md): algorithm and
   dependency choices, including comparisons with other join implementations.
-- [Acero evaluation](uid-acero-evaluation.md): experimental Arrow join comparison.
-- [Benchmarks](../benchmarks/README.md): reproduction commands and recorded timings.
 
 ## History
 

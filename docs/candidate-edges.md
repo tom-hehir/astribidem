@@ -115,8 +115,11 @@ Resolution later loads all edges of the surveys it uses, but no coordinates.
 ## Build edges band by band
 
 When coordinates and KD-trees do not fit in memory, build the edges one
-declination band at a time. The build first streams every survey's
-coordinates into a layout grouped by band:
+declination band at a time. The result is the same as an in-memory build, but
+the layout and intermediate files cost time: on 20,000 rows per catalogue the
+banded route took four to six times as long. Use it only when the in-memory
+route does not fit. The build first streams every survey's coordinates into a
+layout grouped by band:
 
 ```python
 from astribidem import build_edges_by_band, write_band_layout
