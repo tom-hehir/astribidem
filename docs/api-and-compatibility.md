@@ -79,26 +79,12 @@ ID per original input row in the same order. A saved row index alone cannot
 identify a reordered catalogue: retain the source revision and row-order
 provenance alongside it, or map to your own persistent IDs.
 
-## Saved formats
+## Saved files
 
-Package versions and saved-format versions are independent. Format version 1
-is introduced with `0.0.0a0`:
+Index tables carry their matching settings, dedupe outcomes and summary in
+Arrow schema metadata, which Parquet preserves. Saved edge `metadata.json`,
+band `layout.json` and `band-build.json` hold the settings their readers need.
 
-- Index tables carry `astribidem.index_format_version` and `astribidem.version`
-  in Arrow schema metadata. Parquet preserves them, along with matching policy,
-  dedupe outcomes and summaries where those apply.
-- Saved edge `metadata.json`, band `layout.json` and `band-build.json` carry
-  `format`, integer `format_version`, and `astribidem_version` fields.
-- Edge/layout/worker readers reject missing or unsupported format versions
-  before interpreting their files. `index_summary` checks the index format
-  version before reading a spatial summary.
-
-Plain `pyarrow.parquet.read_table` remains a general-purpose loader and does
-not enforce astribidem compatibility. `rows_to_ids` is also usable with caller
-constructed row tables. Consumers interpreting saved index metadata should
-check the format version explicitly. Reading data with Arrow does not imply
-that its matching semantics are compatible with a newer package.
-
-Breaking storage changes will increment the format version and be documented;
-alpha releases need not provide migration readers. A producer package version
-is provenance, not by itself a compatibility check.
+Saved files carry no format or package version, and readers do not check one.
+A release that changes a saved layout says so in the changelog; rebuild the
+files with that release rather than reading older ones.

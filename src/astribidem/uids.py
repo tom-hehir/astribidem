@@ -11,8 +11,6 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from astribidem._formats import index_metadata
-
 
 def _as_arrow(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
     """Arrow values with exact integer identity, including uint64 above int64."""
@@ -209,7 +207,6 @@ def match_uids(
         "ordering": "anchor_then_source_input_order",
     }
     metadata = {
-        **index_metadata(),
         b"astribidem.resolved_config": json.dumps(
             provenance, sort_keys=True, separators=(",", ":"), allow_nan=False
         ).encode(),

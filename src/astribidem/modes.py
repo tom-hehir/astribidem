@@ -30,7 +30,6 @@ from typing import Any
 import numpy as np
 import pyarrow as pa
 
-from astribidem._formats import check_index_metadata, index_metadata
 from astribidem.candidate_edges import CandidateEdges
 from astribidem.graph import build_global_graph
 
@@ -74,7 +73,6 @@ class CrossmatchModeConfig(ABC):
 
 def _with_summary(table: pa.Table, summary: dict[str, Any]) -> pa.Table:
     metadata = dict(table.schema.metadata or {})
-    metadata.update(index_metadata())
     metadata[_SUMMARY_KEY] = json.dumps(
         summary, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
@@ -86,9 +84,7 @@ _SUMMARY_KEY = b"astribidem.summary"
 
 def index_summary(index: pa.Table) -> dict[str, Any]:
     """The summary saved in a resolved index's metadata, such as its entity count."""
-    metadata = index.schema.metadata or {}
-    check_index_metadata(metadata)
-    return json.loads(metadata[_SUMMARY_KEY])
+    return json.loads(index.schema.metadata[_SUMMARY_KEY])
 
 
 def mode_to_mapping(mode: CrossmatchModeConfig) -> dict[str, Any]:
