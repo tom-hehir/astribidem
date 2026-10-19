@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.0a1 — unreleased
+## 0.0.0a1 — 2026-10-19
 
 Breaking changes, with no compatibility shims; rebuild saved edges and
 indexes with this release.
@@ -30,9 +30,12 @@ indexes with this release.
   `{"s": "s/objid"}` writes `s/objid` (was `{"s": "objid"}`). Survey names in
   `id_columns` that are not in `ids` raise.
 - `DegenerateCrossmatchConfig.surveys` is required. Plain-value checks on
-  radii and mode settings are gone (for example non-positive radii, a
-  `size_cap` below one); unknown names, ambiguous overrides and unknown policy
-  values still raise.
+  mode settings are gone (for example a `size_cap` below one); unknown names,
+  ambiguous overrides and unknown policy values still raise. A matching
+  radius that is not positive and finite still raises, at every entry point
+  (`SpatialLink`, `CatalogKernel.all_pairs`, `crossmatch`): without the check,
+  zero matched nothing and a negative radius matched as if it were positive.
+  Zero still disables dedupe.
 
 Added
 
