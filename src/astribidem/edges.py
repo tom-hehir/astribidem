@@ -234,7 +234,7 @@ def edge_settings(
 
 
 def prepare_edge_build(
-    surveys: Mapping[str, tuple[ArrayLike, ArrayLike]],
+    coordinates: Mapping[str, tuple[ArrayLike, ArrayLike]],
     *,
     radius_arcsec: float,
     dedupe_radius_arcsec: float,
@@ -245,7 +245,8 @@ def prepare_edge_build(
 ) -> tuple[EdgeSettings, dict[str, CatalogKernel]]:
     """Prepare kernels once; retain no RA/Dec references in the returned state."""
     kernels = {
-        name: CatalogKernel(ra, dec, name=name) for name, (ra, dec) in surveys.items()
+        name: CatalogKernel(ra, dec, name=name)
+        for name, (ra, dec) in coordinates.items()
     }
     settings = edge_settings(
         {name: len(kernel) for name, kernel in kernels.items()},
@@ -343,7 +344,7 @@ def build_prepared_edges(
 
 
 def build_edges(
-    surveys: Mapping[str, tuple[ArrayLike, ArrayLike]],
+    coordinates: Mapping[str, tuple[ArrayLike, ArrayLike]],
     *,
     radius_arcsec: float,
     dedupe_radius_arcsec: float,
@@ -355,7 +356,7 @@ def build_edges(
 ) -> CandidateEdges:
     """Dedupe every survey and find every in-radius pair between surveys.
 
-    ``surveys`` maps names to aligned one-dimensional ``(ra, dec)`` arrays in
+    ``coordinates`` maps survey names to aligned one-dimensional ``(ra, dec)`` arrays in
     degrees. Mapping order is survey order; array order defines row positions.
     Each survey is converted to XYZ once when its matching kernel is built.
 
@@ -368,12 +369,12 @@ def build_edges(
     """
     workers = resolve_workers(workers)
     settings, kernels = prepare_edge_build(
-        surveys,
+        coordinates,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
         radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
     )
-    del surveys
+    del coordinates
     return build_prepared_edges(settings, kernels, workers=workers)

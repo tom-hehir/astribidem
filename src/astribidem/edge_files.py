@@ -279,7 +279,7 @@ def _empty_edges(metadata: dict) -> CandidateEdges:
 
 
 def build_edges_to_directory(
-    surveys: Mapping[str, tuple[ArrayLike, ArrayLike]],
+    coordinates: Mapping[str, tuple[ArrayLike, ArrayLike]],
     directory: str | Path,
     *,
     radius_arcsec: float,
@@ -302,14 +302,14 @@ def build_edges_to_directory(
     """
     workers = resolve_workers(workers)
     plan, kernels = prepare_edge_build(
-        surveys,
+        coordinates,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
         radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
     )
-    del surveys
+    del coordinates
     directory = Path(directory)
     _check_pair_file_names(plan.pair_radius_arcsec)
     segment = directory / SINGLE_SEGMENT

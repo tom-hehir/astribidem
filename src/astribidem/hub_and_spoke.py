@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
+from numpy.typing import ArrayLike
 
 from astribidem.api import resolve
 from astribidem.candidate_edges import CandidateEdges
@@ -38,123 +40,96 @@ class SpatialLink:
     policy: str = "mutual_nearest"
 
 
-def _spatial_kernel(name: str, table: pa.Table) -> CatalogKernel:
-    """Prepare one spatial participant in its original row order."""
-    if not {"ra", "dec"} <= set(table.column_names):
-        raise ValueError(f"spatial catalog {name!r} requires ra and dec columns")
-    for column in ("ra", "dec"):
-        values = table[column]
-        if not (pa.types.is_floating(values.type) or pa.types.is_integer(values.type)):
-            raise ValueError(f"catalog {name!r}: {column} must be numeric")
-        if values.null_count:
-            raise ValueError(f"catalog {name!r}: {column} must be non-null")
-    return CatalogKernel(
-        table["ra"].to_numpy(zero_copy_only=False),
-        table["dec"].to_numpy(zero_copy_only=False),
-        name=name,
-    )
-
-
 def match_hub_and_spoke(
-    catalogs: Mapping[str, pa.Table],
     *,
     anchor: str,
     links: Mapping[str, UIDLink | SpatialLink],
+    coordinates: Mapping[str, tuple[ArrayLike, ArrayLike]] | None = None,
+    uids: Mapping[str, Any] | None = None,
     dedupe_radius_arcsec: float,
     dedupe_radius_arcsec_overrides: Mapping[str, float] | None = None,
     workers: int = 1,
 ) -> pa.Table:
-    """Match every spoke to one anchor using UID or spatial links.
+    """Match every catalogue in ``links`` to one anchor, by UID or by position.
 
-    All-UID, all-spatial, and mixed-link configurations use the same topology.
-    Return the inner intersection in anchor input order; every link must
-    succeed, with no spoke-to-spoke tests or groups lacking the anchor.
+    ``coordinates`` maps the anchor (when any link is spatial) and each
+    spatially linked catalogue to ``(ra, dec)`` arrays in degrees, as for
+    ``crossmatch``. ``uids`` maps the anchor (when any link is a UID link) and
+    each UID-linked catalogue to unique, non-null identifiers, as for
+    ``match_uids``. The scalar ``dedupe_radius_arcsec`` applies to the anchor
+    and its spatial counterparts; ``dedupe_radius_arcsec_overrides`` names
+    exceptions among them. Zero disables spatial dedupe.
 
-    UID links use each table's ``uid`` column when present, otherwise ``id``.
-    Spatial participants need ``ra`` and ``dec`` in degrees. ``links`` names
-    every non-anchor source. The scalar ``dedupe_radius_arcsec`` applies to
-    the anchor and its spatial counterparts; optional
-    ``dedupe_radius_arcsec_overrides`` names exceptions among those participants.
-    Use zero to disable spatial deduplication; UID uniqueness is unchanged.
+    Every link uses its complete inputs, even when another link has no
+    matches, so spatial ambiguity and dedupe decisions do not depend on the
+    other links. Links are then combined by anchor row as an inner
+    intersection; counterparts need not match each other, unlike the
+    all-pairs contract of a subset join over several surveys.
 
-    Every link uses its complete input catalogs, even when another link has no
-    matches. This preserves spatial ambiguity and deduplication decisions.
-    Successful links are combined only by anchor row, with inner intersection;
-    counterparts need not match each other. This differs from
-    the all-pairs contract of an N-survey spatial subset join.
+    The result holds ``entity_id`` and an int64 ``<name>/row_index`` column
+    for the anchor, then for each catalogue in ``links`` order, with rows in
+    anchor input order. Anchored spatial policies may repeat counterpart rows.
+    Spatial dedupe keeps the lowest row of each duplicate group, so it follows
+    the input order.
 
-    Output contains ``entity_id`` and an int64 ``<source>/row_index`` column per
-    table: row ``i`` is the table's ``i``-th row. Use ``rows_to_ids`` to map rows
-    to IDs. Anchored spatial policies may repeat counterpart rows. Keys remain in native
-    Arrow buffers; only numeric coordinates and row positions use NumPy. Spatial
-    dedupe keeps the lowest row of each duplicate group, so it follows the
-    catalog's row order.
+    Raises:
+        ValueError: ``coordinates`` or ``uids`` does not name exactly the
+            catalogues its links need; or the anchor's coordinates and UIDs
+            differ in length, which would misalign its rows.
     """
-    if not isinstance(catalogs, Mapping) or len(catalogs) < 2:
-        raise ValueError("catalogs must map at least two sources to Arrow tables")
-    names = tuple(catalogs)
+    coordinates = dict(coordinates or {})
+    uids = dict(uids or {})
+    if anchor in links:
+        raise ValueError(f"links must not name the anchor {anchor!r}")
+    names = (anchor, *links)
     check_survey_names(names)
-    if anchor not in catalogs:
-        raise ValueError("anchor must name an input catalog")
-    others = [name for name in names if name != anchor]
-    if not isinstance(links, Mapping) or set(links) != set(others):
-        raise ValueError("links must name every non-anchor catalog exactly once")
-    if any(not isinstance(link, (UIDLink, SpatialLink)) for link in links.values()):
-        raise TypeError("links must contain UIDLink or SpatialLink configurations")
-    spatial = {name for name, link in links.items() if isinstance(link, SpatialLink)}
-    if spatial:
-        spatial.add(anchor)
+    spatial = [name for name, link in links.items() if isinstance(link, SpatialLink)]
+    uid_linked = [name for name, link in links.items() if isinstance(link, UIDLink)]
+    for given, linked, argument in (
+        (coordinates, spatial, "coordinates"),
+        (uids, uid_linked, "uids"),
+    ):
+        needed = {anchor, *linked} if linked else set()
+        if set(given) != needed:
+            raise ValueError(
+                f"{argument} must name exactly {sorted(needed)}, got {sorted(given)}"
+            )
+    if spatial and uid_linked and len(coordinates[anchor][0]) != len(uids[anchor]):
+        raise ValueError(
+            f"the anchor's coordinates and UIDs differ in length: "
+            f"{len(coordinates[anchor][0])} and {len(uids[anchor])}"
+        )
+    spatial_names = [anchor, *spatial] if spatial else []
     radii = dedupe_radius_by_survey(
-        (name for name in names if name in spatial),
-        dedupe_radius_arcsec,
-        dedupe_radius_arcsec_overrides,
+        spatial_names, dedupe_radius_arcsec, dedupe_radius_arcsec_overrides
     )
     workers = resolve_workers(workers)
-
-    uid_sources = {name for name, link in links.items() if isinstance(link, UIDLink)}
-    if uid_sources:
-        uid_sources.add(anchor)
-    for name, table in catalogs.items():
-        if not isinstance(table, pa.Table):
-            raise TypeError(f"catalog {name!r} must be a pyarrow.Table")
-        if len(set(table.column_names)) != len(table.column_names):
-            raise ValueError(f"catalog {name!r} has duplicate column names")
-        if name in uid_sources and not {"uid", "id"} & set(table.column_names):
-            raise ValueError(f"catalog {name!r} needs a uid or id column for UID links")
 
     # The full anchor is prepared once for this invocation. Every spatial
     # spoke reuses its tree and dedupe verdict, including after an empty link.
     if spatial:
-        hub_kernel = _spatial_kernel(anchor, catalogs[anchor])
+        hub_kernel = CatalogKernel(*coordinates[anchor], name=anchor)
         hub_outcome, hub_active = dedupe_survey(anchor, radii[anchor], hub_kernel)
+        n_anchor = len(hub_kernel)
+    else:
+        n_anchor = len(uids[anchor])
 
-    rows = {anchor: pa.array(np.arange(catalogs[anchor].num_rows, dtype=np.int64))}
+    rows = {anchor: pa.array(np.arange(n_anchor, dtype=np.int64))}
     link_provenance = {}
-    for name in others:
-        link = links[name]
+    for name, link in links.items():
         pair_names = (anchor, name)
         if isinstance(link, UIDLink):
-            uid_columns = {
-                source: "uid" if "uid" in catalogs[source].column_names else "id"
-                for source in pair_names
-            }
             pair = match_uids(
-                {
-                    source: catalogs[source][uid_columns[source]]
-                    for source in pair_names
-                },
-                anchor=anchor,
+                {source: uids[source] for source in pair_names}, anchor=anchor
             )
-            pair_rows = {source: pair[row_column(source)] for source in pair_names}
             link_provenance[name] = {
                 "method": "uid",
-                "uid_columns": uid_columns,
                 "resolved_config": json.loads(
                     pair.schema.metadata[RESOLVED_CONFIG_KEY]
                 ),
             }
         else:
-            spoke_kernel = _spatial_kernel(name, catalogs[name])
+            spoke_kernel = CatalogKernel(*coordinates[name], name=name)
             spoke_outcome, spoke_active = dedupe_survey(name, radii[name], spoke_kernel)
             edge = build_pair_edges(
                 anchor,
@@ -177,7 +152,6 @@ def match_hub_and_spoke(
                 ),
             )
             del edge, spoke_outcome
-            pair_rows = {source: pair[row_column(source)] for source in pair_names}
             link_provenance[name] = {
                 "method": "sky",
                 "radius_arcsec": link.radius_arcsec,
@@ -187,6 +161,7 @@ def match_hub_and_spoke(
                 ),
                 "dedupe": json.loads(pair.schema.metadata[DEDUPE_KEY]),
             }
+        pair_rows = {source: pair[row_column(source)] for source in pair_names}
         link_provenance[name]["n_matches"] = pair.num_rows
         # Link decisions above always use full inputs. Only their completed
         # row maps are intersected with earlier links here.

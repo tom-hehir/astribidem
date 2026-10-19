@@ -144,11 +144,8 @@ def anchored_nearest(coords, radius_arcsec: float) -> np.ndarray:
     """Hub-and-spoke ``anchored_nearest`` from catalogue 0, dedupe disabled."""
     names = [f"catalog{i}" for i in range(len(coords))]
     index = match_hub_and_spoke(
-        {
-            name: pa.table({"ra": ra, "dec": dec})
-            for name, (ra, dec) in zip(names, coords)
-        },
         anchor=names[0],
+        coordinates=dict(zip(names, coords)),
         links={
             name: SpatialLink(radius_arcsec, "anchored_nearest") for name in names[1:]
         },

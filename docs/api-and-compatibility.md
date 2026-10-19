@@ -47,8 +47,9 @@ settings have the same scientific metadata.
 
 Banded builds use the same radius arguments. `match_hub_and_spoke` uses the
 same dedupe default/overrides for spatial participants, while each `SpatialLink`
-sets its matching radius. It accepts Arrow tables; `match_uids` accepts a
-mapping of names to identifier arrays.
+sets its matching radius. It takes the same `(ra, dec)` mapping as `crossmatch`
+for spatial participants, and the same mapping of names to identifier arrays as
+`match_uids` for UID participants.
 
 Every matching call is self-contained. RA/Dec becomes XYZ at kernel
 construction, once per survey in an in-memory build or once per loaded region

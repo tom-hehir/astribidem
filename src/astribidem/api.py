@@ -92,7 +92,7 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
 
 
 def crossmatch(
-    surveys: Mapping[str, tuple[ArrayLike, ArrayLike]],
+    coordinates: Mapping[str, tuple[ArrayLike, ArrayLike]],
     *,
     radius_arcsec: float,
     dedupe_radius_arcsec: float,
@@ -109,17 +109,17 @@ def crossmatch(
     for the matching settings and ``resolve`` for the result. No payloads are
     read and nothing is saved.
     """
-    names = tuple(surveys)
+    names = tuple(coordinates)
     workers = resolve_workers(workers)
     settings, kernels = prepare_edge_build(
-        surveys,
+        coordinates,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
         radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=None if mode.requires_all_surveys() else _required_pairs(mode, names),
     )
-    del surveys
+    del coordinates
     edges = build_prepared_edges(settings, kernels, workers=workers)
     del kernels
     return resolve(edges, mode)

@@ -11,12 +11,26 @@ from astribidem import SpatialLink, UIDLink, rows_to_ids
 from astribidem import match_hub_and_spoke as match_hub_and_spoke_rows
 
 
-def match_hub_and_spoke(catalogs, **kwargs):
-    """Rows mapped to each table's ``id`` column, as the assertions below expect."""
-    return rows_to_ids(
-        match_hub_and_spoke_rows(catalogs, **kwargs),
-        {name: table["id"] for name, table in catalogs.items()},
+def match_hub_and_spoke(catalogs, *, anchor, links, **kwargs):
+    """Match test tables, then map rows to each table's ``id`` column.
+
+    Spatial participants read their ``ra`` and ``dec`` columns; UID
+    participants their ``uid`` column, or ``id`` when there is none.
+    """
+    spatial = [name for name, link in links.items() if isinstance(link, SpatialLink)]
+    uid_linked = [name for name, link in links.items() if isinstance(link, UIDLink)]
+    coordinates = {
+        name: (catalogs[name]["ra"], catalogs[name]["dec"])
+        for name in ([anchor, *spatial] if spatial else [])
+    }
+    uids = {
+        name: catalogs[name]["uid" if "uid" in catalogs[name].column_names else "id"]
+        for name in ([anchor, *uid_linked] if uid_linked else [])
+    }
+    rows = match_hub_and_spoke_rows(
+        anchor=anchor, links=links, coordinates=coordinates, uids=uids, **kwargs
     )
+    return rows_to_ids(rows, {name: catalogs[name]["id"] for name in (anchor, *links)})
 
 
 def catalog(ids, *, uid=None, offsets=None, id_type=None):
@@ -68,13 +82,20 @@ def test_four_sources_intersect_links_in_anchor_order_and_keep_column_order(
         dedupe_radius_arcsec=0.0,
         dedupe_radius_arcsec_overrides={"anchor": 0, "sky": 0},
     )
-    assert result.column_names == ["entity_id", *(f"{name}/id" for name in tables)]
+    # The anchor first, then the catalogues in links order.
+    assert result.column_names == [
+        "entity_id",
+        "anchor/id",
+        "last/id",
+        "sky/id",
+        "uid/id",
+    ]
     assert result.to_pydict() == {
         "entity_id": [0, 1],
         "anchor/id": [40, 30],
-        "uid/id": [104, 103],
-        "sky/id": [240, 230],
         "last/id": [304, 303],
+        "sky/id": [240, 230],
+        "uid/id": [104, 103],
     }
     metadata = json.loads(result.schema.metadata[b"astribidem.resolved_config"])
     assert metadata["method"] == "hub_and_spoke"
@@ -185,7 +206,7 @@ def test_spatial_dedupe_keeps_first_row_and_original_arrow_type(id_type, values)
     assert metadata["links"]["sky"]["dedupe"]["a"]["n_dropped"] == 2
 
 
-def test_uid_links_compare_full_unsigned_range_exactly_and_default_to_id():
+def test_uid_links_compare_full_unsigned_range_exactly():
     result = match_hub_and_spoke(
         {
             "a": catalog([2**63 - 1, 0], id_type=pa.int64()),
@@ -249,17 +270,25 @@ def test_link_configurations_are_frozen():
         SpatialLink(1).radius_arcsec = 2
 
 
+COORDINATES = ([180.0], [0.0])
+
+
 @pytest.mark.parametrize(
     "kwargs,message",
     [
-        ({"anchor": "missing"}, "anchor"),
-        ({"links": {}}, "links"),
-        ({"links": {"a": UIDLink(), "b": UIDLink()}}, "links"),
-        ({"links": {"b": object()}}, "configurations"),
+        ({"links": {"a": UIDLink(), "b": UIDLink()}}, "must not name the anchor"),
+        ({"uids": {"a": [1]}}, "uids must name exactly"),
+        ({"uids": {"a": [1], "b": [1], "c": [1]}}, "uids must name exactly"),
+        ({"coordinates": {"a": COORDINATES}}, "coordinates must name exactly"),
         (
-            {"dedupe_radius_arcsec": 0.0, "dedupe_radius_arcsec_overrides": {"a": 0}},
-            "unknown surveys",
+            {
+                "links": {"b": UIDLink(), "c": SpatialLink(1)},
+                "coordinates": {"a": COORDINATES, "c": COORDINATES},
+                "uids": {"a": [1, 2], "b": [1]},
+            },
+            "differ in length",
         ),
+        ({"dedupe_radius_arcsec_overrides": {"a": 0}}, "unknown surveys"),
         ({"workers": 0}, "workers"),
     ],
 )
@@ -267,12 +296,12 @@ def test_invalid_composition_configuration(kwargs, message):
     settings = {
         "anchor": "a",
         "links": {"b": UIDLink()},
+        "uids": {"a": [1], "b": [1]},
         "dedupe_radius_arcsec": 0.0,
-        "dedupe_radius_arcsec_overrides": {},
     }
     settings.update(kwargs)
-    with pytest.raises((ValueError, TypeError), match=message):
-        match_hub_and_spoke({"a": catalog([1]), "b": catalog([1])}, **settings)
+    with pytest.raises(ValueError, match=message):
+        match_hub_and_spoke_rows(**settings)
 
 
 def test_dedupe_override_for_an_unknown_participant_is_rejected():
@@ -323,18 +352,6 @@ def test_low_precision_catalog_coordinates_warn():
         )
 
 
-def test_non_numeric_catalog_coordinates_are_rejected():
-    table = pa.table({"id": [1], "ra": ["180.0"], "dec": [0.0]})
-    with pytest.raises(ValueError, match="ra must be numeric"):
-        match_hub_and_spoke(
-            {"a": table, "b": catalog([2], offsets=[0.1])},
-            anchor="a",
-            links={"b": SpatialLink(1)},
-            dedupe_radius_arcsec=0.0,
-            dedupe_radius_arcsec_overrides={"a": 0, "b": 0},
-        )
-
-
 def test_low_precision_column_warns_once_through_every_conversion(recwarn):
     table = pa.table(
         {
@@ -364,13 +381,13 @@ def test_hub_kernel_and_dedupe_are_reused_and_spokes_released(
     from astribidem import hub_and_spoke as module
 
     kernels, dedupes = {}, []
-    original_kernel, original_dedupe = module._spatial_kernel, module.dedupe_survey
+    original_kernel, original_dedupe = module.CatalogKernel, module.dedupe_survey
 
-    def prepare(name, table):
+    def prepare(ra, dec, *, name):
         if name != "a":
             assert kernels["a"]() is not None
             assert all(ref() is None for n, ref in kernels.items() if n != "a")
-        kernel = original_kernel(name, table)
+        kernel = original_kernel(ra, dec, name=name)
         assert name not in kernels
         kernels[name] = weakref.ref(kernel)
         return kernel
@@ -379,7 +396,7 @@ def test_hub_kernel_and_dedupe_are_reused_and_spokes_released(
         dedupes.append(name)
         return original_dedupe(name, radius, kernel)
 
-    monkeypatch.setattr(module, "_spatial_kernel", prepare)
+    monkeypatch.setattr(module, "CatalogKernel", prepare)
     monkeypatch.setattr(module, "dedupe_survey", dedupe)
     tables = {
         "uid": catalog([300], uid=[99 if empty_uid_link else 1]),
@@ -400,8 +417,8 @@ def test_hub_kernel_and_dedupe_are_reused_and_spokes_released(
     if not empty_uid_link:
         assert result.to_pydict() == {
             "entity_id": [0],
-            "uid/id": [300],
             "a/id": [10],
+            "uid/id": [300],
             "b/id": [20],
             "c/id": [30],
         }
@@ -415,14 +432,14 @@ def test_hub_kernel_and_dedupe_are_reused_and_spokes_released(
 def test_mixed_calls_prepare_fresh_kernels(monkeypatch):
     from astribidem import hub_and_spoke as module
 
-    original = module._spatial_kernel
+    original = module.CatalogKernel
     prepared = []
 
-    def prepare(name, table):
+    def prepare(ra, dec, *, name):
         prepared.append(name)
-        return original(name, table)
+        return original(ra, dec, name=name)
 
-    monkeypatch.setattr(module, "_spatial_kernel", prepare)
+    monkeypatch.setattr(module, "CatalogKernel", prepare)
     for offset, expected in ((0.1, 1), (10, 0)):
         result = match_hub_and_spoke(
             {"a": catalog([1], offsets=[0]), "b": catalog([2], offsets=[offset])},
