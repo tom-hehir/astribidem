@@ -23,7 +23,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-      - run: uv sync --locked --extra dev
+      - run: uv sync --locked --group dev
       - name: Check release version
         env:
           RELEASE_TAG: ${{ inputs.release-tag }}

@@ -23,25 +23,35 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Astronomy",
 ]
 dependencies = [
-  "numpy>=1.26",
-  "scipy>=1.11.1",
-  "pyarrow>=15",
+  "numpy>=1.26",  # coordinates, row positions and policy reductions
+  "scipy>=1.11.1",  # cKDTree pair search and connected components
+  "pyarrow>=15",  # Arrow index tables, compute kernels and Parquet files
 ]
 
 [project.optional-dependencies]
 # DuckDB sorts the index in resolve_to_file; the band build itself needs nothing extra.
 out-of-core = ["duckdb>=1.5"]
-test = ["pytest>=8", "astropy>=6", "duckdb>=1.5"]
-dev = [
-  "pytest>=8", "astropy>=6", "duckdb>=1.5", "ruff==0.16.9",
-  "pre-commit>=4", "coverage[toml]>=7", "twine>=6",
-]
 
 [project.urls]
 Repository = "https://github.com/tom-hehir/astribidem"
 Documentation = "https://github.com/tom-hehir/astribidem/blob/main/docs/README.md"
 Issues = "https://github.com/tom-hehir/astribidem/issues"
 Changelog = "https://github.com/tom-hehir/astribidem/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+tests = [
+  "pytest>=8",  # test runner
+  "pytest-xdist>=3",  # parallel runs: pytest -n auto
+  "astropy>=6",  # independent reference for the matching tests
+  "duckdb>=1.5",  # exercises the sorted resolve_to_file
+  "coverage[toml]>=7",  # coverage report in CI
+]
+dev = [
+  {include-group = "tests"},
+  "ruff==0.16.9",  # lint and format; the same version as in pre-commit
+  "pre-commit>=4",  # runs the hooks
+  "twine>=6",  # checks distributions before release
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/astribidem"]

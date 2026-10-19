@@ -5,7 +5,7 @@
 Use Python 3.14 to match CI and create a project environment:
 
 ```sh
-uv sync --locked --extra dev --python 3.14
+uv sync --locked --group dev --python 3.14
 uv run --no-sync pre-commit install
 uv run --no-sync pre-commit run --all-files
 uv run --no-sync pytest
