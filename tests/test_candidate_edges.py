@@ -224,14 +224,14 @@ PATCH_ROWS = [
 def test_combined_segments_equal_the_whole_build():
     edges = build_edges(PATCHES, **SETTINGS)
     segments = [restrict(edges, rows) for rows in PATCH_ROWS]
-    from astribidem import combine_segments
+    from astribidem.candidate_edges import combine_segments
 
     assert_same_edges(combine_segments(segments), edges)
 
 
 def test_segments_save_their_rows_and_reload(tmp_path):
-    from astribidem import read_segment, segment_names, write_segment
-    from astribidem.edge_files import write_metadata
+    from astribidem import read_segment, segment_names
+    from astribidem.edge_files import write_metadata, write_segment
 
     edges = build_edges(PATCHES, **SETTINGS)
     segments = [restrict(edges, rows) for rows in PATCH_ROWS]

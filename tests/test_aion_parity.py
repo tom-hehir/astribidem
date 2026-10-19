@@ -19,15 +19,17 @@ from astribidem import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
+    as_chunks,
     audit_edges,
     build_edges,
+    build_edges_by_band,
     build_edges_to_directory,
     crossmatch,
     read_edges,
     resolve,
+    write_band_layout,
     write_edges,
 )
-from astribidem.banded import as_chunks, build_edges_by_band, write_band_layout
 from astribidem.modes import entity_order
 
 FIXTURES = Path(__file__).with_name("fixtures")

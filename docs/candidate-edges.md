@@ -75,8 +75,8 @@ Edges are sorted by `(row_a, row_b)`, and row numbers are global.
 A segment that covers only some rows also has a `rows/<survey>.parquet` file
 listing them; a segment without a `rows` directory covers every row.
 `read_segment(directory, name)` loads one segment, `segment_names(directory)`
-lists them, and `read_edges` loads every segment and combines them with
-`combine_segments`. Resolving segments separately gives the same entities as
+lists them, `read_edges_metadata(directory)` returns the saved settings, and
+`read_edges` loads every segment and combines them. Resolving segments separately gives the same entities as
 resolving them combined.
 
 ## Stream edges to disk
@@ -122,8 +122,7 @@ route does not fit. The build first streams every survey's coordinates into a
 layout grouped by band:
 
 ```python
-from astribidem import build_edges_by_band, write_band_layout
-from astribidem.banded import as_chunks
+from astribidem import as_chunks, build_edges_by_band, write_band_layout
 
 write_band_layout(
     "layout-directory",

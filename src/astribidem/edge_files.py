@@ -101,7 +101,7 @@ def write_metadata(
     (Path(directory) / "metadata.json").write_text(text + "\n")
 
 
-def read_metadata(directory: str | Path) -> dict:
+def read_edges_metadata(directory: str | Path) -> dict:
     """The contents of a saved edge directory's ``metadata.json``."""
     return json.loads((Path(directory) / "metadata.json").read_text())
 
@@ -178,7 +178,7 @@ def write_edges(edges: CandidateEdges, directory: str | Path) -> None:
 def read_segment(directory: str | Path, name: str) -> CandidateEdges:
     """Load one saved segment."""
     directory = Path(directory)
-    metadata = read_metadata(directory)
+    metadata = read_edges_metadata(directory)
     if name not in metadata["segments"]:
         raise ValueError(f"no segment {name!r}; segments: {metadata['segments']}")
     segment = directory / name
@@ -223,7 +223,7 @@ def read_segment(directory: str | Path, name: str) -> CandidateEdges:
 
 def segment_names(directory: str | Path) -> list[str]:
     """The segments of a saved edge directory, in their recorded order."""
-    return list(read_metadata(directory)["segments"])
+    return list(read_edges_metadata(directory)["segments"])
 
 
 def read_edges(directory: str | Path) -> CandidateEdges:
@@ -236,7 +236,7 @@ def read_edges(directory: str | Path) -> CandidateEdges:
     """
     names = segment_names(directory)
     if not names:
-        return _empty_edges(read_metadata(directory))
+        return _empty_edges(read_edges_metadata(directory))
     return combine_segments([read_segment(directory, name) for name in names])
 
 

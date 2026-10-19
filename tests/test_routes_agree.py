@@ -15,6 +15,7 @@ from astribidem import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
+    as_chunks,
     build_edges,
     build_edges_by_band,
     crossmatch,
@@ -23,7 +24,6 @@ from astribidem import (
     resolve_to_file,
     write_band_layout,
 )
-from astribidem.banded import as_chunks
 
 pytestmark = pytest.mark.slow
 

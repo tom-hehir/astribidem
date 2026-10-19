@@ -11,9 +11,9 @@ from astribidem import (
     DegenerateCrossmatchConfig,
     EntitywiseCrossmatchConfig,
     build_edges,
-    combine_segments,
     resolve,
 )
+from astribidem.candidate_edges import combine_segments
 from astribidem.edges import edge_settings
 from astribidem.regions import (
     MARGIN_ABOVE,

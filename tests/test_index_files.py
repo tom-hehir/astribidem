@@ -11,11 +11,13 @@ from astribidem import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
+    as_chunks,
+    build_edges_by_band,
     read_edges,
     resolve,
+    write_band_layout,
     write_edges,
 )
-from astribidem.banded import as_chunks, build_edges_by_band, write_band_layout
 from astribidem.edge_files import segment_names
 from astribidem.index_files import resolve_to_file
 

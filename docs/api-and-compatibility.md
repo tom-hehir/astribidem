@@ -18,15 +18,15 @@ Names explicitly exported from `astribidem` are the supported alpha interface.
 | Match shared identifiers | `match_uids`, `match_hub_and_spoke`, `UIDLink`, `SpatialLink` |
 | Use results | `rows_to_ids`, `ids_to_rows`, `index_summary` |
 | Reuse candidate searches | `build_edges`, `resolve`, `audit_edges`, `CandidateEdges`, `PairEdges`, `DedupeOutcome` |
-| Save candidate searches | `write_edges`, `read_edges`, `build_edges_to_directory` |
-| Build and resolve large catalogues | `write_band_layout`, `build_edges_by_band`, `resolve_to_file` |
-| Coordinate separate workers | `prepare_band_build`, `build_band`, `sweep_boundaries`, `read_segment`, `write_segment`, `segment_names`, `combine_segments` |
+| Save candidate searches | `write_edges`, `read_edges`, `read_edges_metadata`, `build_edges_to_directory` |
+| Build and resolve large catalogues | `write_band_layout`, `as_chunks`, `build_edges_by_band`, `resolve_to_file` |
+| Coordinate separate workers | `prepare_band_build`, `build_band`, `sweep_boundaries`, `read_segment`, `segment_names` |
 | Query the geometric kernel | `CatalogKernel` |
 | Inspect the installed release | `__version__` |
 
 The worker/segment and kernel interfaces are advanced and may evolve during
 alpha. Use the high-level functions unless you need their explicit controls.
-The `astribidem.banded.as_chunks` helper is also available. Other module helpers,
+Other module helpers,
 underscore-prefixed names and intermediate files are implementation details.
 
 ## Coordinate and radius inputs
