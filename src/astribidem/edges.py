@@ -1,6 +1,6 @@
 """Coordinates, deduplication and the candidate-edge build.
 
-Adapted from Astral Projections. Everything here works in row positions: row
+Adapted from astral-projections. Everything here works in row positions: row
 ``i`` of a survey is the ``i``-th coordinate passed in.
 """
 
@@ -35,7 +35,7 @@ def dedupe_survey(
 
     Within-radius components that are cliques are duplicates by the physical
     argument (below the survey's resolution floor, two rows cannot be two
-    resolved objects): keep the **lowest row**, drop the rest. The kept row
+    resolved objects): keep the lowest row, drop the rest. The kept row
     therefore depends on input order; sort the inputs first when that order
     is not meaningful. Non-clique components (chains from shredding, flanking
     geometries) are disputed: every member is flagged and excluded from

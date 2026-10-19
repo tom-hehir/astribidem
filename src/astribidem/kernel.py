@@ -1,45 +1,27 @@
-"""Exact spatial pair-generation kernel: scipy cKDTree over unit vectors.
+"""Exact spatial pair search: a scipy cKDTree over float64 unit vectors.
 
-Coordinates become float64 Cartesian unit vectors, angular radii become chord
-lengths, and every query is exact — no approximate structures, since a missed
-pair is a silent duplicate entity. Adopted 2026-08-13 (AION-2 issue #188,
-transplanted here per astral-projections issue #8) after a measured
-head-to-head against the smatch C HEALPix engine: the dual-tree join is ~10x
-faster on the production-density benchmark, chord separations avoid smatch's
-~0.05" ``1 - cos`` cancellation floor, and no GPL dependency is needed.
+Coordinates become float64 Cartesian unit vectors and angular radii become
+chord lengths. Every query is exact, because a missed pair would silently
+become a duplicate entity. The kernel guarantees:
 
-The kernel contract:
+- one ``CatalogKernel`` per survey serves its dedupe self-match and every pair
+  it takes part in; trees are built with ``compact_nodes=True,
+  balanced_tree=True``, which reference the coordinates rather than copy them;
+- the boundary is inclusive: pairs at exactly the radius are emitted
+  (separation <= r). scipy's ``query(distance_upper_bound=...)`` is exclusive
+  at the bound, so the k-truncated path raises the bound by one ulp;
+- output is deterministic: every emitting method sorts pairs by ``(i, j)``;
+- separations are exact: float64 chord lengths converted by ``2 asin(d / 2)``.
 
-- **Build once, match many.** One ``CatalogKernel`` per survey serves its
-  dedupe self-match and every pair it participates in. Trees are built with
-  ``compact_nodes=True, balanced_tree=True`` (data referenced, not copied;
-  ~24 B/row overhead) — kernel policy, not configuration.
-- **Boundary is inclusive.** Pairs at exactly the radius are included
-  (separation <= r) by every emitting method. scipy's
-  ``query(distance_upper_bound=...)`` is exclusive at the bound, so the
-  k-truncated path bumps it by one ulp to match.
-- **Deterministic output.** Raw dual-tree output follows traversal order, so
-  every emitting method lexsorts by ``(i, j)`` before returning.
-- **Exact separations.** float64 chord lengths converted through
-  ``2 asin(d / 2)``; there is no cosine-distance path.
+``workers`` on ``all_pairs`` splits the query rows into chunks, each with its
+own tree joined against the other survey's tree in a thread: the C join
+releases the GIL but has no workers option. A minimum chunk size keeps small
+inputs in one call. Chunks partition the rows in order and each is sorted, so
+the result equals the one-call join bit for bit. ``all_pairs_chunks`` yields
+the chunks in order with at most ``workers`` in flight.
 
-Parallelism: the dual-tree join and ``query_pairs`` are single-threaded C
-routines with no ``workers`` option, but they release the GIL, so ``workers``
-on ``all_pairs`` splits the query side into chunks — a throwaway tree per
-chunk, joined against the resident right tree, one call per thread. Chunking
-exists only to manufacture parallel calls (serially it costs ~2.5x); the
-chunk count is capped by a minimum chunk size so small inputs stay one-shot.
-Because chunks partition ``i`` in order and each chunk is lexsorted, the
-concatenated output is bit-identical to the one-shot join.
-``all_pairs_chunks`` yields the same chunks in order with at most ``workers``
-in flight, so a consumer that writes each chunk out holds only
-``workers * chunk_rows`` query rows' worth of pairs at a time.
-
-Deliberately absent: a minimum-radius "too close" veto. The old matching
-layer's ``min_radius_arcsec`` veto was its only guard against duplicates and
-blends; here per-survey dedupe and the entitywise dispute machinery own that
-concern, and the edge substrate must stay complete — pre-filtering edges can
-convert a disputed component into a false clean clique.
+There is no minimum-separation veto: the pair set must stay complete, because
+removing a pair can turn a disputed component into a false clean one.
 """
 
 from __future__ import annotations

@@ -45,7 +45,7 @@ def _check_mode_fits_edges(mode: CrossmatchModeConfig, edges: CandidateEdges) ->
 def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
     """Resolve candidate edges into one row-position index.
 
-    ``mode`` selects an Astral-derived subset join or exactly-once entity
+    ``mode`` selects a subset join or exactly-once entity
     resolution. A degenerate mode reads only its own surveys' pairs, so it
     can use edges built for more surveys; an entitywise mode uses every
     survey in the edges. Entity selection is applied only after all surveys

@@ -1,21 +1,16 @@
-"""Mode builders: one invocation emits exactly one index product.
+"""Modes: how candidate edges become one index.
 
-Two kinds exist. The **degenerate** crossmatch (`DegenerateCrossmatchConfig`)
-is, for a declared list of surveys, an independent inner join under a
-symmetric policy. "Degenerate" is the physics sense of *non-unique*: a
-catalog row may hold multiple group memberships across products (it appears
-in the {A,B}, {A,C}, and {A,B,C} products at once), and this mode does not
-resolve that. The **entitywise** crossmatch (`EntitywiseCrossmatchConfig`)
-lifts the degeneracy — the exactly-once outer-join over all configured
-surveys, with absent rows represented by nulls and disputed rows handled by
-the configured disposition.
+A degenerate crossmatch (``DegenerateCrossmatchConfig``) is an inner join of
+a declared list of surveys under one pairwise policy. "Degenerate" is meant in
+the physics sense of non-unique: a row may belong to groups in several
+products (the {A, B}, {A, C} and {A, B, C} joins at once), and the mode does
+not resolve that. An entitywise crossmatch (``EntitywiseCrossmatchConfig``)
+assigns every row of every survey to exactly one entity, with nulls for
+absent surveys and disputed rows handled as configured.
 
-Index columns carry **row positions** (``<survey>/row_index``): row ``i`` of a
-survey is the ``i``-th coordinate the caller passed in, and a null marks an
-absent survey. ``astribidem.rows_to_ids`` maps rows to caller IDs.
-
-Pass a mode instance to ``astribidem.crossmatch``. Mode configuration
-is recorded in the resulting Arrow schema metadata.
+Index columns hold row positions (``<survey>/row_index``): row ``i`` of a
+survey is the ``i``-th coordinate passed in. Each index records its mode in
+the Arrow schema metadata.
 """
 
 from __future__ import annotations
@@ -274,7 +269,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
         return _with_summary(table, summary)
 
 
-# --- ambiguous-component resolvers (R3a / R3b) -------------------------------
+# --- resolvers for ambiguous components ---------------------------------------
 #
 # Both operate on ONE ambiguous component at a time and return a partition of
 # its nodes into legal cliques (each: <=1 row per survey, all pairs within
@@ -289,7 +284,7 @@ def _resolve_split_component(
     node_survey: np.ndarray,
     neighbors: dict[int, dict[int, float]],
 ) -> list[list[int]]:
-    """R3b: greedy complete-linkage agglomeration under the group laws.
+    """The ``split`` resolver: greedy complete-linkage grouping.
 
     Merge the two groups whose farthest cross-pair separation is smallest,
     vetoing any merge that would repeat a survey or leave a non-edge cross-pair
@@ -338,7 +333,7 @@ def _resolve_sequential_component(
     neighbors: dict[int, dict[int, float]],
     priority_rank: dict[int, int],
 ) -> list[list[int]]:
-    """R3a: sequential priority with the all-members attach law.
+    """The ``sequential`` resolver: attach rows survey by survey, in priority order.
 
     Surveys are processed in declared priority order. Each survey's rows
     greedily attach to the nearest existing entity they are within radius of
@@ -419,18 +414,25 @@ class EntitySelectionConfig:
 
 @dataclass(frozen=True)
 class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
-    """The exactly-once outer-join entity index over all configured surveys.
+    """Every row of every survey in exactly one entity: an outer join.
 
-    ``resolver`` decides the ambiguous components (clean components always
-    become entities): ``refuse`` (the conservative default) dissolves them to
-    flagged singletons; ``sequential`` (R3a) resolves by a declared survey
-    ``priority``; ``split`` (R3b) groups rows greedily by complete linkage.
-    R3a/R3b emit resolved groups as ordinary (unflagged) entities and dissolve
-    only components larger than ``size_cap``. ``disputed`` (``singleton`` /
-    ``drop``) governs the flagged rows — dissolved-component members and
-    dedupe-disputed rows. An optional ``selection`` materializes only entities
-    with the requested survey membership after resolution; omitted surveys
-    remain optional and still participate in dispute detection.
+    Clean components (cliques with at most one row per survey) always become
+    entities. The resolver decides the ambiguous ones.
+
+    Attributes:
+        resolver: ``refuse`` (the default) dissolves ambiguous components into
+            flagged singletons; ``sequential`` attaches rows survey by survey
+            in ``priority`` order; ``split`` groups rows greedily by complete
+            linkage. ``sequential`` and ``split`` emit their groups as ordinary
+            entities, and dissolve components larger than ``size_cap``.
+        disputed: ``singleton`` keeps flagged rows (dissolved-component members
+            and dedupe-disputed rows) as one-row entities; ``drop`` removes them.
+        priority: the survey order that decides contested attachments; only
+            for the ``sequential`` resolver, and it must name every survey.
+        size_cap: the largest component ``sequential`` or ``split`` resolves.
+        selection: keeps only entities with the required survey membership,
+            applied after resolution; omitted surveys still take part in
+            dispute detection.
     """
 
     resolver: str = "refuse"
