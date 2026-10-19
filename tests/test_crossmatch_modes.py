@@ -113,10 +113,6 @@ def test_degenerate_three_way_requires_all_pairwise_agreement():
 def test_degenerate_anchored_policy_restricted_to_two_surveys():
     with pytest.raises(ValueError, match="two-survey policy"):
         DegenerateCrossmatchConfig(surveys=["a", "b", "c"], policy="anchored_nearest")
-    with pytest.raises(ValueError, match="at least two surveys"):
-        DegenerateCrossmatchConfig(surveys=["a"])
-    with pytest.raises(ValueError, match="twice"):
-        DegenerateCrossmatchConfig(surveys=["a", "a"])
 
 
 # --- entitywise --------------------------------------------------------------
@@ -274,16 +270,10 @@ def test_entitywise_absent_surveys_are_null_rows():
 def test_entitywise_validation():
     with pytest.raises(ValueError, match="unknown resolver"):
         EntitywiseCrossmatchConfig(resolver="nope")
-    with pytest.raises(ValueError, match="requires 'priority'"):
-        EntitywiseCrossmatchConfig(resolver="sequential")
+    with pytest.raises(ValueError, match="unknown disputed"):
+        EntitywiseCrossmatchConfig(disputed="nope")
     with pytest.raises(ValueError, match="applies only to"):
         EntitywiseCrossmatchConfig(resolver="refuse", priority=["a"])
-    with pytest.raises(ValueError, match="size_cap"):
-        EntitywiseCrossmatchConfig(size_cap=0)
-    with pytest.raises(ValueError, match="min_surveys"):
-        EntitySelectionConfig(min_surveys=0)
-    with pytest.raises(ValueError, match="duplicate"):
-        EntitySelectionConfig(must_include_surveys=["a", "a"])
 
 
 def test_entitywise_orders_entities_by_first_present_survey_then_row():

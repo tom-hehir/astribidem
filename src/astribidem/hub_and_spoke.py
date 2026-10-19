@@ -5,18 +5,17 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from numbers import Integral
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from astribidem._radii import dedupe_radii, radius
 from astribidem.api import resolve
 from astribidem.candidate_edges import CandidateEdges
-from astribidem.edges import build_pair_edges, dedupe_survey
+from astribidem.edges import build_pair_edges, dedupe_radius_by_survey, dedupe_survey
+from astribidem.index_table import check_survey_names
 from astribidem.kernel import CatalogKernel, resolve_workers
-from astribidem.modes import SUBSET_JOIN_POLICIES, DegenerateCrossmatchConfig
+from astribidem.modes import DegenerateCrossmatchConfig
 from astribidem.uids import match_uids
 
 
@@ -31,13 +30,6 @@ class SpatialLink:
 
     radius_arcsec: float
     policy: str = "mutual_nearest"
-
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "radius_arcsec", radius(self.radius_arcsec, name="radius_arcsec")
-        )
-        if not isinstance(self.policy, str) or self.policy not in SUBSET_JOIN_POLICIES:
-            raise ValueError(f"unknown spatial policy: {self.policy!r}")
 
 
 def _spatial_kernel(name: str, table: pa.Table) -> CatalogKernel:
@@ -95,8 +87,7 @@ def match_hub_and_spoke(
     if not isinstance(catalogs, Mapping) or len(catalogs) < 2:
         raise ValueError("catalogs must map at least two sources to Arrow tables")
     names = tuple(catalogs)
-    if any(not isinstance(name, str) or not name or "/" in name for name in names):
-        raise ValueError("source names must be non-empty and must not contain '/'")
+    check_survey_names(names)
     if anchor not in catalogs:
         raise ValueError("anchor must name an input catalog")
     others = [name for name in names if name != anchor]
@@ -107,14 +98,12 @@ def match_hub_and_spoke(
     spatial = {name for name, link in links.items() if isinstance(link, SpatialLink)}
     if spatial:
         spatial.add(anchor)
-    radii = dedupe_radii(
+    radii = dedupe_radius_by_survey(
         (name for name in names if name in spatial),
         dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides,
     )
-    if isinstance(workers, bool) or not isinstance(workers, Integral):
-        raise TypeError("workers must be an integer >= 1 or -1")
-    workers = resolve_workers(int(workers))
+    workers = resolve_workers(workers)
 
     uid_sources = {name for name, link in links.items() if isinstance(link, UIDLink)}
     if uid_sources:

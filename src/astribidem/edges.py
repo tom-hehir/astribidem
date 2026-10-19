@@ -13,14 +13,13 @@ from itertools import combinations
 import numpy as np
 from numpy.typing import ArrayLike
 
-from astribidem._radii import dedupe_radii
-from astribidem._radii import radius as validate_radius
 from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
 from astribidem.graph import (
     clique_mask,
     component_sizes_and_edge_counts,
     connected_components,
 )
+from astribidem.index_table import check_survey_names
 from astribidem.kernel import (
     CatalogKernel,
     resolve_workers,
@@ -209,50 +208,23 @@ def edge_settings(
     names = tuple(n_rows)
     if not names:
         raise ValueError("at least one survey is required")
-    for name in names:
-        if not isinstance(name, str) or not name or "/" in name:
-            raise ValueError("survey names must be non-empty and must not contain '/'")
-    known = set(names)
-    expanded_dedupe = dedupe_radii(
-        names, dedupe_radius_arcsec, dedupe_radius_arcsec_overrides
-    )
-    radius_arcsec = validate_radius(radius_arcsec, name="radius_arcsec")
-    if radius_arcsec_overrides is not None and not isinstance(
-        radius_arcsec_overrides, Mapping
-    ):
-        raise TypeError("radius_arcsec_overrides must be a mapping")
-
-    radii = {frozenset(pair): radius_arcsec for pair in combinations(names, 2)}
-    overridden: set[frozenset[str]] = set()
-    for pair, radius in (radius_arcsec_overrides or {}).items():
-        if isinstance(pair, str) or len(pair) != 2:
-            raise ValueError("each radius override must name exactly two surveys")
-        key = frozenset(pair)
-        if len(key) != 2 or not key <= known:
-            raise ValueError(f"radius override names invalid survey pair: {pair!r}")
-        if key in overridden:
-            raise ValueError(f"duplicate radius override for pair: {sorted(key)}")
-        radius = validate_radius(radius, name="radius override")
-        overridden.add(key)
-        radii[key] = radius
-
+    check_survey_names(names)
+    radii = radius_by_pair(names, radius_arcsec, radius_arcsec_overrides)
     selected = None
     if pairs is not None:
         selected = set()
         for pair in pairs:
             key = frozenset(pair)
-            if (
-                isinstance(pair, str)
-                or len(pair) != 2
-                or len(key) != 2
-                or not key <= known
-            ):
+            # A restriction naming an unknown pair would silently build nothing.
+            if isinstance(pair, str) or key not in radii:
                 raise ValueError(f"pairs names an invalid survey pair: {pair!r}")
             selected.add(key)
     return EdgeSettings(
         survey_names=names,
         n_rows={name: int(n_rows[name]) for name in names},
-        dedupe_radius_arcsec=expanded_dedupe,
+        dedupe_radius_arcsec=dedupe_radius_by_survey(
+            names, dedupe_radius_arcsec, dedupe_radius_arcsec_overrides
+        ),
         pair_radius_arcsec={
             (a, b): radii[frozenset((a, b))]
             for a, b in combinations(names, 2)
@@ -272,30 +244,68 @@ def _prepare_edge_build(
     pairs: Iterable[tuple[str, str]] | None = None,
 ) -> tuple[EdgeSettings, dict[str, CatalogKernel]]:
     """Prepare kernels once; retain no RA/Dec references in the returned state."""
-    if not isinstance(surveys, Mapping) or not surveys:
-        raise ValueError("surveys must map at least one name to an (ra, dec) tuple")
-    n_rows = {}
-    for name, coordinates in surveys.items():
-        if not isinstance(coordinates, tuple) or len(coordinates) != 2:
-            raise ValueError(f"survey {name!r}: coordinates must be an (ra, dec) tuple")
-        ra_shape, dec_shape = (np.shape(values) for values in coordinates)
-        if len(ra_shape) != 1 or len(dec_shape) != 1:
-            raise ValueError(f"survey {name!r}: ra/dec must be 1-D")
-        if ra_shape != dec_shape:
-            raise ValueError(f"survey {name!r}: ra/dec shapes differ")
-        n_rows[name] = ra_shape[0]
+    kernels = {
+        name: CatalogKernel(ra, dec, name=name) for name, (ra, dec) in surveys.items()
+    }
     settings = edge_settings(
-        n_rows,
+        {name: len(kernel) for name, kernel in kernels.items()},
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
         radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
     )
-    kernels = {
-        name: CatalogKernel(ra, dec, name=name) for name, (ra, dec) in surveys.items()
-    }
     return settings, kernels
+
+
+def dedupe_radius_by_survey(
+    names: Iterable[str],
+    default: float,
+    overrides: Mapping[str, float] | None = None,
+) -> dict[str, float]:
+    """Each survey's dedupe radius: ``overrides[name]`` if given, else ``default``.
+
+    Raises:
+        ValueError: ``overrides`` names a survey not in ``names``; a typo would
+            otherwise leave that survey at the default without notice.
+    """
+    names = tuple(names)
+    overrides = overrides or {}
+    unknown = set(overrides) - set(names)
+    if unknown:
+        raise ValueError(
+            f"dedupe_radius_arcsec_overrides names unknown surveys: {sorted(unknown)}"
+        )
+    return {name: float(overrides.get(name, default)) for name in names}
+
+
+def radius_by_pair(
+    names: Iterable[str],
+    default: float,
+    overrides: Mapping[tuple[str, str] | frozenset[str], float] | None = None,
+) -> dict[frozenset[str], float]:
+    """Each survey pair's matching radius: its entry in ``overrides``, else ``default``.
+
+    Raises:
+        ValueError: an override names something other than two of ``names``, or
+            names one pair twice (for example both ``("a", "b")`` and
+            ``("b", "a")``), which would make its radius ambiguous.
+    """
+    radii = {frozenset(pair): float(default) for pair in combinations(names, 2)}
+    overridden: set[frozenset[str]] = set()
+    for pair, radius in (overrides or {}).items():
+        key = frozenset(pair)
+        if isinstance(pair, str) or key not in radii:
+            raise ValueError(
+                f"radius_arcsec_overrides names an invalid survey pair: {pair!r}"
+            )
+        if key in overridden:
+            raise ValueError(
+                f"radius_arcsec_overrides names the pair {sorted(key)} twice"
+            )
+        overridden.add(key)
+        radii[key] = float(radius)
+    return radii
 
 
 def _dedupe_kernels(

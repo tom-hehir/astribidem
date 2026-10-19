@@ -117,7 +117,7 @@ def test_empty_sources_retain_output_types(join):
     "uids,kwargs,message",
     [
         ({}, {}, "at least one"),
-        ({"a/b": [1]}, {}, "source names"),
+        ({"a/b": [1]}, {}, "survey names"),
         ({"a": [1, 1]}, {}, "duplicate"),
         ({"a": [1, None]}, {}, "non-null"),
         ({"a": [1.0]}, {}, "integer or string"),

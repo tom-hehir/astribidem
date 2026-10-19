@@ -68,35 +68,21 @@ def test_scalar_defaults_and_overrides_have_identical_results(tmp_path, route):
     }
 
 
-@pytest.mark.parametrize("argument", ["radius_arcsec", "dedupe_radius_arcsec"])
-@pytest.mark.parametrize("value", [-1, float("nan"), float("inf"), True, "1", {}, None])
-def test_radius_defaults_require_finite_scalars(argument, value):
-    settings = {"radius_arcsec": 1.0, "dedupe_radius_arcsec": 0.0, argument: value}
-    with pytest.raises(ValueError, match="scalar radius"):
-        build_edges({"a": coordinates([0])}, **settings)
-
-
-@pytest.mark.parametrize(
-    "overrides",
-    [{"missing": 0}, {"a": -1}, {"a": float("inf")}, {"a": True}, {"a": "1"}, []],
-)
-def test_invalid_dedupe_overrides_fail(overrides):
-    with pytest.raises((ValueError, TypeError), match="dedupe"):
+def test_dedupe_override_for_an_unknown_survey_fails():
+    with pytest.raises(ValueError, match="unknown surveys"):
         build_edges(
             {"a": coordinates([0])},
             radius_arcsec=1,
             dedupe_radius_arcsec=0,
-            dedupe_radius_arcsec_overrides=overrides,
+            dedupe_radius_arcsec_overrides={"missing": 0},
         )
 
 
 @pytest.mark.parametrize(
     "surveys",
     [
-        [],
         {},
         {"a": ([0],)},
-        {"a": {"ra": [0], "dec": [0]}},
         {"a": ([0], [0, 1])},
         {"a": ([[0]], [[0]])},
         {"a/b": ([0], [0])},

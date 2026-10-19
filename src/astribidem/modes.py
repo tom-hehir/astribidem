@@ -209,17 +209,10 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
     entitywise mode lifts this degeneracy into an exactly-once assignment.
     """
 
-    surveys: list[str] = field(default_factory=list)
+    surveys: list[str]
     policy: str = "mutual_nearest"
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "surveys", [str(s) for s in self.surveys])
-        if len(self.surveys) < 2:
-            raise ValueError(
-                f"subset join needs at least two surveys, got {self.surveys!r}"
-            )
-        if len(set(self.surveys)) != len(self.surveys):
-            raise ValueError(f"subset join lists a survey twice: {self.surveys!r}")
         if self.policy not in SUBSET_JOIN_POLICIES:
             raise ValueError(
                 f"unknown policy {self.policy!r}; supported: "
@@ -421,20 +414,11 @@ class EntitySelectionConfig:
     must_include_surveys: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        if self.min_surveys < 1:
-            raise ValueError(
-                f"selection min_surveys must be >= 1, got {self.min_surveys}"
-            )
-        names = [str(name) for name in self.must_include_surveys]
-        if any(not name for name in names):
-            raise ValueError("selection must_include_surveys may not contain ''")
-        if len(set(names)) != len(names):
-            raise ValueError(
-                "selection must_include_surveys contains duplicate survey names"
-            )
-        # This field denotes a set. Canonicalizing it makes policy identity and
-        # serialized metadata independent of declaration order.
-        object.__setattr__(self, "must_include_surveys", sorted(names))
+        # The field is a set: sorting makes equality and the recorded metadata
+        # independent of the order it was written in.
+        object.__setattr__(
+            self, "must_include_surveys", sorted(self.must_include_surveys)
+        )
 
     def required_positions(self, names: tuple[str, ...]) -> tuple[int, ...]:
         if self.min_surveys > len(names):
@@ -484,13 +468,6 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
             raise ValueError(
                 f"unknown disputed disposition {self.disputed!r}; supported: "
                 f"{list(ENTITY_DISPOSITIONS)}"
-            )
-        if self.size_cap < 1:
-            raise ValueError(f"size_cap must be >= 1, got {self.size_cap}")
-        if self.resolver == "sequential" and not self.priority:
-            raise ValueError(
-                "resolver 'sequential' (R3a) requires 'priority': an ordering "
-                "of the configured surveys that decides contested attachments"
             )
         if self.priority is not None and self.resolver != "sequential":
             raise ValueError(

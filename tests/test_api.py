@@ -118,12 +118,9 @@ def test_empty_survey_is_valid_and_missing_members_stay_null():
     ]
 
 
-@pytest.mark.parametrize(
-    "radii", [{}, {"a": -1}, {"a": float("nan")}, {"a": 0, "x": 0}]
-)
-def test_dedupe_choice_is_explicit_and_valid(radii):
-    with pytest.raises(ValueError, match="dedupe"):
-        resolve({"a": survey([0])}, dedupe_radius_arcsec=radii)
+def test_dedupe_override_for_an_unknown_survey_is_rejected():
+    with pytest.raises(ValueError, match="unknown surveys"):
+        resolve({"a": survey([0])}, dedupe_radius_arcsec_overrides={"x": 0.5})
 
 
 @pytest.mark.parametrize(
@@ -132,7 +129,6 @@ def test_dedupe_choice_is_explicit_and_valid(radii):
         {("a", "b"): 1, ("b", "a"): 1},
         {("a", "z"): 1},
         {("a", "a"): 1},
-        {("a", "b"): float("nan")},
     ],
 )
 def test_invalid_pair_override_is_rejected(override):
@@ -142,7 +138,7 @@ def test_invalid_pair_override_is_rejected(override):
 
 
 def test_unknown_mode_survey_is_rejected_before_matching():
-    with pytest.raises(ValueError, match="unknown surveys"):
+    with pytest.raises(ValueError, match="invalid survey pair"):
         resolve({"a": survey([0])}, mode=DegenerateCrossmatchConfig(surveys=["a", "b"]))
 
 

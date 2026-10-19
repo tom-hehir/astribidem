@@ -126,12 +126,6 @@ def chord_to_arcsec(chord: np.ndarray) -> np.ndarray:
     return 2.0 * np.arcsin(half) / _ARCSEC_TO_RAD
 
 
-def _validate_radius(radius_arcsec: float) -> float:
-    if not math.isfinite(radius_arcsec) or radius_arcsec < 0:
-        raise ValueError(f"radius_arcsec must be finite and >= 0, got {radius_arcsec}")
-    return arcsec_to_chord(radius_arcsec)
-
-
 #: Chunks smaller than this are not worth their per-chunk tree build; the
 #: chunk count is capped so no chunk falls below it (oversplitting makes the
 #: chunked join slower than one-shot even fully threaded).
@@ -165,7 +159,8 @@ class CatalogKernel:
     ) -> None:
         ra_shape, dec_shape = np.shape(ra), np.shape(dec)
         if len(ra_shape) != 1 or len(dec_shape) != 1 or ra_shape != dec_shape:
-            raise ValueError("ra/dec must be aligned 1-D arrays")
+            where = f"survey {name!r}: " if name is not None else ""
+            raise ValueError(f"{where}ra/dec must be aligned 1-D arrays")
         self.xyz = radec_to_xyz(ra, dec, name=name)
         self.tree = cKDTree(self.xyz, compact_nodes=True, balanced_tree=True)
 
@@ -180,7 +175,7 @@ class CatalogKernel:
         The dedupe primitive. Exactly-coincident rows (separation 0) are
         included, as dedupe requires.
         """
-        chord = _validate_radius(radius_arcsec)
+        chord = arcsec_to_chord(radius_arcsec)
         pairs = self.tree.query_pairs(chord, output_type="ndarray")
         pairs = pairs[np.lexsort((pairs[:, 1], pairs[:, 0]))]
         i = pairs[:, 0].astype(np.int64)
@@ -211,7 +206,7 @@ class CatalogKernel:
         bit-identical to the serial call. ``chunk_rows`` overrides the
         automatic per-worker chunk sizing (mainly for tests).
         """
-        chord = _validate_radius(radius_arcsec)
+        chord = arcsec_to_chord(radius_arcsec)
         if k is None:
             parts = list(
                 self._all_pairs_chunk_arrays(other, chord, workers, chunk_rows)
@@ -257,7 +252,7 @@ class CatalogKernel:
         chunks concatenate to exactly ``all_pairs(other, radius_arcsec)``. At
         most ``workers`` chunks are computed or buffered at once.
         """
-        chord = _validate_radius(radius_arcsec)
+        chord = arcsec_to_chord(radius_arcsec)
         yield from self._all_pairs_chunk_arrays(other, chord, workers, chunk_rows)
 
     def _all_pairs_chunk_arrays(

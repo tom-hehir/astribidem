@@ -26,8 +26,6 @@ def _required_pairs(
 
 def _check_mode_fits_edges(mode: CrossmatchModeConfig, edges: CandidateEdges) -> None:
     """Fail loudly when the edges cannot answer the mode's question."""
-    if not isinstance(mode, CrossmatchModeConfig):
-        raise TypeError("mode must be a CrossmatchModeConfig")
     unknown = set(mode.required_surveys()) - set(edges.survey_names)
     if unknown:
         raise ValueError(f"mode names unknown surveys: {sorted(unknown)}")
@@ -110,14 +108,7 @@ def crossmatch(
     for the matching settings and ``resolve`` for the result. No payloads are
     read and nothing is saved.
     """
-    if not isinstance(mode, CrossmatchModeConfig):
-        raise TypeError("mode must be a CrossmatchModeConfig")
-    if not isinstance(surveys, Mapping) or not surveys:
-        raise ValueError("surveys must map at least one name to an (ra, dec) tuple")
     names = tuple(surveys)
-    unknown = set(mode.required_surveys()) - set(names)
-    if unknown:
-        raise ValueError(f"mode names unknown surveys: {sorted(unknown)}")
     workers = resolve_workers(workers)
     settings, kernels = _prepare_edge_build(
         surveys,

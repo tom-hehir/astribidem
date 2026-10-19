@@ -11,6 +11,8 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
+from astribidem.index_table import check_survey_names
+
 
 def _as_arrow(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
     """Arrow values with exact integer identity, including uint64 above int64."""
@@ -122,8 +124,7 @@ def match_uids(
     if not isinstance(uids, Mapping) or not uids:
         raise ValueError("uids must map at least one source name to UID values")
     names = tuple(uids)
-    if any(not isinstance(name, str) or not name or "/" in name for name in names):
-        raise ValueError("source names must be non-empty and must not contain '/'")
+    check_survey_names(names)
     if join not in ("inner", "left", "outer"):
         raise ValueError("join must be 'inner', 'left', or 'outer'")
     if anchor is None:

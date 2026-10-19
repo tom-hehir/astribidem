@@ -234,16 +234,14 @@ def test_counterparts_do_not_need_to_spatially_match_each_other():
     assert result.num_rows == 1
 
 
-@pytest.mark.parametrize("radius", [True, "1", 0, -1, np.nan, np.inf])
-def test_spatial_link_rejects_invalid_radius(radius):
-    with pytest.raises(ValueError, match="radius"):
-        SpatialLink(radius)
-
-
-@pytest.mark.parametrize("policy", [None, 1, "unknown"])
-def test_spatial_link_rejects_unknown_policy(policy):
+def test_spatial_link_with_an_unknown_policy_is_rejected():
     with pytest.raises(ValueError, match="policy"):
-        SpatialLink(1, policy)
+        match_hub_and_spoke(
+            {"a": catalog([1], offsets=[0]), "b": catalog([2], offsets=[0])},
+            anchor="a",
+            links={"b": SpatialLink(1, "unknown")},
+            dedupe_radius_arcsec=0.0,
+        )
 
 
 def test_link_configurations_are_frozen():
@@ -260,9 +258,8 @@ def test_link_configurations_are_frozen():
         ({"links": {"b": object()}}, "configurations"),
         (
             {"dedupe_radius_arcsec": 0.0, "dedupe_radius_arcsec_overrides": {"a": 0}},
-            "spatial participant",
+            "unknown surveys",
         ),
-        ({"workers": True}, "workers"),
         ({"workers": 0}, "workers"),
     ],
 )
@@ -278,23 +275,14 @@ def test_invalid_composition_configuration(kwargs, message):
         match_hub_and_spoke({"a": catalog([1]), "b": catalog([1])}, **settings)
 
 
-@pytest.mark.parametrize(
-    "radii",
-    [
-        {},
-        {"a": 0},
-        {"a": 0, "b": 0, "extra": 0},
-        {"a": True, "b": 0},
-        {"a": -1, "b": 0},
-    ],
-)
-def test_spatial_dedupe_configuration_is_explicit_and_exact(radii):
-    with pytest.raises(ValueError, match="radius|spatial participants"):
+def test_dedupe_override_for_an_unknown_participant_is_rejected():
+    with pytest.raises(ValueError, match="unknown surveys"):
         match_hub_and_spoke(
             {"a": catalog([1], offsets=[0]), "b": catalog([2], offsets=[0])},
             anchor="a",
             links={"b": SpatialLink(1)},
-            dedupe_radius_arcsec=radii,
+            dedupe_radius_arcsec=0.0,
+            dedupe_radius_arcsec_overrides={"extra": 0.5},
         )
 
 

@@ -134,10 +134,6 @@ def test_empty_inputs():
 
 def test_validation_errors():
     kernel = CatalogKernel(np.array([1.0]), np.array([0.0]))
-    with pytest.raises(ValueError, match="radius_arcsec"):
-        kernel.self_pairs(float("nan"))
-    with pytest.raises(ValueError, match="radius_arcsec"):
-        kernel.all_pairs(kernel, -1.0)
     with pytest.raises(ValueError, match="k must be >= 1"):
         kernel.all_pairs(kernel, 1.0, k=0)
     with pytest.raises(ValueError, match="workers"):

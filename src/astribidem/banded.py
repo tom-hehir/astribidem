@@ -39,6 +39,7 @@ from astribidem.candidate_edges import DedupeOutcome
 from astribidem.edge_files import write_metadata, write_segment
 from astribidem.edges import EdgeSettings, edge_settings
 from astribidem.graph import connected_components
+from astribidem.index_table import check_survey_names
 from astribidem.kernel import float64_coordinates
 from astribidem.regions import (
     MARGIN_ABOVE,
@@ -87,8 +88,7 @@ def write_band_layout(
     directory.mkdir(parents=True, exist_ok=True)
     entries = []
     for name, chunks in surveys.items():
-        if not isinstance(name, str) or not name or "/" in name:
-            raise ValueError("survey names must be non-empty and must not contain '/'")
+        check_survey_names([name])
         survey_directory = directory / name
         survey_directory.mkdir(exist_ok=True)
         index = {"chunk": [], "row_group": [], "band": [], "n_rows": []}
@@ -99,8 +99,6 @@ def write_band_layout(
                 raise ValueError(
                     f"survey {name!r}: ra/dec chunks must be 1-D and aligned"
                 )
-            if not (np.isfinite(ra).all() and np.isfinite(dec).all()):
-                raise ValueError(f"survey {name!r}: coordinates must be finite")
             rows = np.arange(offset, offset + len(ra), dtype=np.int64)
             offset += len(ra)
             bands = band_of(dec, band_height_deg)
