@@ -136,16 +136,19 @@ def rows_to_ids(
     Each named survey's row column is used to index ``ids[survey]``, which
     holds one ID per input row in input order (the coordinates passed to the
     edge build, or the UIDs passed to ``match_uids``). The result replaces the
-    row column in place as ``<survey>/<id column>`` (default ``id``); null
-    rows stay null. Surveys not named in ``ids`` keep their row column. The
-    IDs are not checked.
+    row column in place, named ``<survey>/id`` unless ``id_columns`` gives
+    another column name; null rows stay null. Surveys not named in ``ids``
+    keep their row column. The IDs are not checked.
     """
     id_columns = id_columns or {}
+    unknown = set(id_columns) - set(ids)
+    if unknown:
+        raise ValueError(f"id_columns names surveys not in ids: {sorted(unknown)}")
     for survey, values in ids.items():
         rows = row_column(survey)
         table = table.set_column(
             table.column_names.index(rows),
-            f"{survey}/{id_columns.get(survey, 'id')}",
+            id_columns.get(survey, f"{survey}/id"),
             pc.take(as_arrow(values, name=survey, kind="IDs"), table[rows]),
         )
     return table

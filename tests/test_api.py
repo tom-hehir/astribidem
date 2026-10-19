@@ -66,7 +66,7 @@ def test_rows_to_ids_keeps_types_nulls_column_order_and_metadata():
     table = rows_to_ids(
         result,
         {"a": pa.array([big, big + 1], pa.uint64()), "b": ["b-0"]},
-        id_columns={"a": "object_id"},
+        id_columns={"a": "a/object_id"},
     )
     assert table.column_names == ["a/object_id", "b/id", "disputed_reason"]
     assert table.schema.field("a/object_id").type == pa.uint64()
@@ -211,6 +211,23 @@ def test_ids_to_rows_inverts_rows_to_ids_with_typed_and_null_ids():
     ids = {"s": pa.array([big, big + 1], pa.uint64())}
     matches = pa.table({"s/row_index": pa.array([1, None, 0], pa.int64())})
     assert ids_to_rows(rows_to_ids(matches, ids), ids).equals(matches)
+
+
+def test_one_id_columns_mapping_converts_both_ways():
+    ids = {"a": ["x", "y"], "b": [7, 8]}
+    id_columns = {"a": "a_ref"}
+    matches = pa.table(
+        {"a/row_index": pa.array([1, 0], pa.int64()), "b/row_index": [0, None]}
+    )
+    labeled = rows_to_ids(matches, ids, id_columns=id_columns)
+    assert labeled.column_names == ["a_ref", "b/id"]
+    assert ids_to_rows(labeled, ids, id_columns=id_columns).equals(matches)
+
+
+def test_rows_to_ids_rejects_id_columns_for_unknown_surveys():
+    matches = pa.table({"a/row_index": pa.array([0], pa.int64())})
+    with pytest.raises(ValueError, match="not in ids"):
+        rows_to_ids(matches, {"a": [1]}, id_columns={"b": "b/key"})
 
 
 def test_ids_to_rows_reads_a_named_id_column_and_casts_integer_widths():

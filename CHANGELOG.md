@@ -26,6 +26,9 @@ indexes with this release.
   `astribidem.out_of_core` (`banded`, `regions`, `index_files`); root exports
   are unchanged. The `large` extra is renamed `out-of-core`.
 - `combine_segments` and `write_segment` are no longer exported from the root.
+- `rows_to_ids(id_columns=)` gives whole column names, as `ids_to_rows` does:
+  `{"s": "s/objid"}` writes `s/objid` (was `{"s": "objid"}`). Survey names in
+  `id_columns` that are not in `ids` raise.
 - `DegenerateCrossmatchConfig.surveys` is required. Plain-value checks on
   radii and mode settings are gone (for example non-positive radii, a
   `size_cap` below one); unknown names, ambiguous overrides and unknown policy

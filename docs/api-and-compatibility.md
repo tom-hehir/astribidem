@@ -74,17 +74,19 @@ outer-join keys in remaining source/input order. Hub-and-spoke follows anchor
 order. UID and hub-and-spoke results also contain a consecutive `entity_id`;
 it is not a persistent identifier across independently rebuilt inputs.
 
-`rows_to_ids` preserves Arrow types, null membership and schema metadata. It
-does not validate caller IDs for uniqueness or scientific meaning. Supply one
+`rows_to_ids` preserves Arrow types, null membership and schema metadata.
+Each ID column is named `<survey>/id` unless `id_columns` gives another whole
+column name (`{"s": "s/objid"}` writes column `s/objid`). It does not validate
+caller IDs for uniqueness or scientific meaning. Supply one
 ID per original input row in the same order. A saved row index alone cannot
 identify a reordered catalogue: retain the source revision and row-order
 provenance alongside it, or map to your own persistent IDs.
 
 `ids_to_rows` is the inverse: it turns a match table's ID columns back into
 row positions, given the same per-row IDs, which must then be unique and
-non-null. Its `id_columns` names whole columns (`{"s": "key"}` reads column
-`key`), so it can read match tables built elsewhere; an ID missing from the
-lookup raises instead of becoming null.
+non-null. It takes the same `id_columns`, so one mapping converts both ways
+and match tables built elsewhere, with columns such as `key`, can be read; an
+ID missing from the lookup raises instead of becoming null.
 
 ## Saved files
 
