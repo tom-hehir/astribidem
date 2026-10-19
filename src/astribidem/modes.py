@@ -31,7 +31,8 @@ import numpy as np
 import pyarrow as pa
 
 from astribidem.candidate_edges import CandidateEdges
-from astribidem.graph import build_global_graph
+from astribidem.graph import build_global_graph, positions_in
+from astribidem.index_table import SUMMARY_KEY, encode_metadata, row_column
 
 SUBSET_JOIN_POLICIES = (
     "mutual_nearest",
@@ -47,13 +48,6 @@ _MISSING = -1  # Internal NumPy position marker; never serialized.
 _REASON_CLEAN = None
 _REASON_AMBIGUOUS = "ambiguous_component"
 _REASON_DEDUPE = "dedupe_disputed"
-
-
-def _json_bytes(value: Any) -> bytes:
-    """Encode structured Arrow metadata as compact, deterministic JSON."""
-    return json.dumps(
-        value, allow_nan=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
 
 
 class CrossmatchModeConfig(ABC):
@@ -73,18 +67,8 @@ class CrossmatchModeConfig(ABC):
 
 def _with_summary(table: pa.Table, summary: dict[str, Any]) -> pa.Table:
     metadata = dict(table.schema.metadata or {})
-    metadata[_SUMMARY_KEY] = json.dumps(
-        summary, sort_keys=True, separators=(",", ":"), allow_nan=False
-    ).encode()
+    metadata[SUMMARY_KEY] = encode_metadata(summary)
     return table.replace_schema_metadata(metadata)
-
-
-_SUMMARY_KEY = b"astribidem.summary"
-
-
-def index_summary(index: pa.Table) -> dict[str, Any]:
-    """The summary saved in a resolved index's metadata, such as its entity count."""
-    return json.loads(index.schema.metadata[_SUMMARY_KEY])
 
 
 def mode_to_mapping(mode: CrossmatchModeConfig) -> dict[str, Any]:
@@ -111,11 +95,6 @@ def entity_order(membership: np.ndarray) -> np.ndarray:
     return np.lexsort((row, first))
 
 
-def _row_column(survey: str) -> str:
-    """The output column carrying a survey's row positions."""
-    return f"{survey}/row_index"
-
-
 def _row_array(positions: np.ndarray, missing: np.ndarray | None = None) -> pa.Array:
     """Row positions -> int64 Arrow array; ``missing`` marks null slots."""
     return pa.array(positions, pa.int64(), mask=missing)
@@ -128,13 +107,10 @@ def _sorted_lookup(
     keys: np.ndarray, values: np.ndarray, queries: np.ndarray
 ) -> np.ndarray:
     """Map queries through a sorted (keys -> values) table; misses -> -1."""
-    if len(keys) == 0 or len(queries) == 0:
-        return np.full(len(queries), -1, dtype=np.int64)
-    pos = np.searchsorted(keys, queries)
-    pos_clipped = np.clip(pos, 0, len(keys) - 1)
-    hit = keys[pos_clipped] == queries
+    positions = positions_in(keys, queries)
+    found = positions >= 0
     out = np.full(len(queries), -1, dtype=np.int64)
-    out[hit] = values[pos_clipped[hit]]
+    out[found] = values[positions[found]]
     return out
 
 
@@ -259,7 +235,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
                 rows = {s: r[keep] for s, r in rows.items()}
 
         columns: dict[str, pa.Array] = {
-            _row_column(name): _row_array(rows[name]) for name in self.surveys
+            row_column(name): _row_array(rows[name]) for name in self.surveys
         }
         for a, b in combinations(self.surveys, 2):
             ka, va, sep = matched[(a, b)]
@@ -277,9 +253,9 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
         n_groups = len(rows[anchor])
         metadata = {
             b"astribidem.match_index.mode": b"degenerate",
-            b"astribidem.match_index.surveys": _json_bytes(list(self.surveys)),
+            b"astribidem.match_index.surveys": encode_metadata(list(self.surveys)),
             b"astribidem.match_index.match_policy": self.policy.encode(),
-            b"astribidem.match_index.pair_radius_arcsec": _json_bytes(
+            b"astribidem.match_index.pair_radius_arcsec": encode_metadata(
                 edges.radius_metadata(combinations(self.surveys, 2))
             ),
         }
@@ -664,7 +640,7 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
         arrays: dict[str, pa.Array] = {}
         for i, name in enumerate(names):
             positions = membership[:, i]
-            arrays[_row_column(name)] = _row_array(
+            arrays[row_column(name)] = _row_array(
                 positions, missing=positions == _MISSING
             )
         arrays["disputed_reason"] = pa.array(list(reason_values[codes]), pa.string())
@@ -678,14 +654,16 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
             for a, b in combinations(names, 2)
         ]
         metadata = {
-            b"astribidem.entity_index.surveys": _json_bytes(list(names)),
+            b"astribidem.entity_index.surveys": encode_metadata(list(names)),
             b"astribidem.entity_index.resolver": self.resolver.encode(),
             b"astribidem.entity_index.disputed": self.disputed.encode(),
             b"astribidem.entity_index.size_cap": str(self.size_cap).encode(),
-            b"astribidem.entity_index.pair_radius_arcsec": _json_bytes(radius_entries),
+            b"astribidem.entity_index.pair_radius_arcsec": encode_metadata(
+                radius_entries
+            ),
         }
         if self.priority is not None:
-            metadata[b"astribidem.entity_index.priority"] = _json_bytes(
+            metadata[b"astribidem.entity_index.priority"] = encode_metadata(
                 list(self.priority)
             )
         if self.selection is not None:
@@ -693,7 +671,7 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
                 self.selection.min_surveys
             ).encode()
             metadata[b"astribidem.entity_index.selection.must_include_surveys"] = (
-                _json_bytes(list(self.selection.must_include_surveys))
+                encode_metadata(list(self.selection.must_include_surveys))
             )
         table = pa.table(arrays).replace_schema_metadata(metadata)
         summary = {

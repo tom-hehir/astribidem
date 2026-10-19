@@ -13,7 +13,13 @@ import pyarrow.compute as pc
 from astribidem.api import resolve
 from astribidem.candidate_edges import CandidateEdges
 from astribidem.edges import build_pair_edges, dedupe_radius_by_survey, dedupe_survey
-from astribidem.index_table import check_survey_names
+from astribidem.index_table import (
+    DEDUPE_KEY,
+    RESOLVED_CONFIG_KEY,
+    check_survey_names,
+    encode_metadata,
+    row_column,
+)
 from astribidem.kernel import CatalogKernel, resolve_workers
 from astribidem.modes import DegenerateCrossmatchConfig
 from astribidem.uids import match_uids
@@ -139,12 +145,12 @@ def match_hub_and_spoke(
                 },
                 anchor=anchor,
             )
-            pair_rows = {source: pair[f"{source}/row_index"] for source in pair_names}
+            pair_rows = {source: pair[row_column(source)] for source in pair_names}
             link_provenance[name] = {
                 "method": "uid",
                 "uid_columns": uid_columns,
                 "resolved_config": json.loads(
-                    pair.schema.metadata[b"astribidem.resolved_config"]
+                    pair.schema.metadata[RESOLVED_CONFIG_KEY]
                 ),
             }
         else:
@@ -171,15 +177,15 @@ def match_hub_and_spoke(
                 ),
             )
             del edge, spoke_outcome
-            pair_rows = {source: pair[f"{source}/row_index"] for source in pair_names}
+            pair_rows = {source: pair[row_column(source)] for source in pair_names}
             link_provenance[name] = {
                 "method": "sky",
                 "radius_arcsec": link.radius_arcsec,
                 "policy": link.policy,
                 "resolved_config": json.loads(
-                    pair.schema.metadata[b"astribidem.resolved_config"]
+                    pair.schema.metadata[RESOLVED_CONFIG_KEY]
                 ),
-                "dedupe": json.loads(pair.schema.metadata[b"astribidem.dedupe"]),
+                "dedupe": json.loads(pair.schema.metadata[DEDUPE_KEY]),
             }
         link_provenance[name]["n_matches"] = pair.num_rows
         # Link decisions above always use full inputs. Only their completed
@@ -207,11 +213,7 @@ def match_hub_and_spoke(
     }
     columns = {"entity_id": pa.array(np.arange(len(rows[anchor]), dtype=np.int64))}
     for name in names:
-        columns[f"{name}/row_index"] = pc.cast(rows.pop(name), pa.int64())
+        columns[row_column(name)] = pc.cast(rows.pop(name), pa.int64())
     return pa.table(columns).replace_schema_metadata(
-        {
-            b"astribidem.resolved_config": json.dumps(
-                configuration, sort_keys=True, separators=(",", ":"), allow_nan=False
-            ).encode(),
-        }
+        {RESOLVED_CONFIG_KEY: encode_metadata(configuration)}
     )

@@ -233,7 +233,7 @@ def edge_settings(
     )
 
 
-def _prepare_edge_build(
+def prepare_edge_build(
     surveys: Mapping[str, tuple[ArrayLike, ArrayLike]],
     *,
     radius_arcsec: float,
@@ -308,7 +308,7 @@ def radius_by_pair(
     return radii
 
 
-def _dedupe_kernels(
+def dedupe_kernels(
     settings: EdgeSettings, kernels: Mapping[str, CatalogKernel]
 ) -> tuple[tuple[DedupeOutcome, ...], dict[str, np.ndarray]]:
     """Deduplicate using the same kernels that serve cross-survey matching."""
@@ -322,10 +322,10 @@ def _dedupe_kernels(
     return tuple(outcomes), active
 
 
-def _build_prepared_edges(
+def build_prepared_edges(
     settings: EdgeSettings, kernels: Mapping[str, CatalogKernel], *, workers: int
 ) -> CandidateEdges:
-    outcomes, active = _dedupe_kernels(settings, kernels)
+    outcomes, active = dedupe_kernels(settings, kernels)
     edges = {
         frozenset((a, b)): build_pair_edges(
             a,
@@ -367,7 +367,7 @@ def build_edges(
     over those pairs. Coordinates must already be cleaned.
     """
     workers = resolve_workers(workers)
-    settings, kernels = _prepare_edge_build(
+    settings, kernels = prepare_edge_build(
         surveys,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
@@ -376,4 +376,4 @@ def build_edges(
         pairs=pairs,
     )
     del surveys
-    return _build_prepared_edges(settings, kernels, workers=workers)
+    return build_prepared_edges(settings, kernels, workers=workers)

@@ -118,7 +118,8 @@ def test_chunked_join_is_bit_identical_to_serial():
     b = CatalogKernel(ra_b, dec_b)
 
     serial = a.all_pairs(b, 3.0)
-    chunked = a.all_pairs(b, 3.0, workers=4, chunk_rows=137)
+    chunks = list(a.all_pairs_chunks(b, 3.0, workers=4, chunk_rows=137))
+    chunked = [np.concatenate([chunk[k] for chunk in chunks]) for k in range(3)]
     for s, c in zip(serial, chunked):
         np.testing.assert_array_equal(s, c)
 

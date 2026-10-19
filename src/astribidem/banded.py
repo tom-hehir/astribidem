@@ -38,7 +38,7 @@ import pyarrow.parquet as pq
 from astribidem.candidate_edges import DedupeOutcome
 from astribidem.edge_files import write_metadata, write_segment
 from astribidem.edges import EdgeSettings, edge_settings
-from astribidem.graph import connected_components
+from astribidem.graph import connected_components, positions_in
 from astribidem.index_table import check_survey_names
 from astribidem.kernel import float64_coordinates
 from astribidem.regions import (
@@ -360,12 +360,11 @@ def _read_handover(directory: Path, settings: EdgeSettings) -> Handover:
 def _row_pieces(handover: Handover, name: str, rows: np.ndarray) -> np.ndarray:
     """The piece of each of ``rows`` in ``handover``, or -1 when absent."""
     order = np.argsort(handover.rows[name], kind="stable")
-    sorted_rows = handover.rows[name][order]
-    if len(sorted_rows) == 0:
-        return np.full(len(rows), -1, dtype=np.int64)
-    index = np.clip(np.searchsorted(sorted_rows, rows), 0, len(sorted_rows) - 1)
-    found = sorted_rows[index] == rows
-    return np.where(found, handover.piece[name][order][index], -1)
+    positions = positions_in(handover.rows[name][order], rows)
+    pieces = np.full(len(rows), -1, dtype=np.int64)
+    found = positions >= 0
+    pieces[found] = handover.piece[name][order][positions[found]]
+    return pieces
 
 
 def _piece_groups(settings: EdgeSettings, handover: Handover) -> np.ndarray:

@@ -32,9 +32,9 @@ from astribidem.candidate_edges import (
     combine_segments,
 )
 from astribidem.edges import (
-    _dedupe_kernels,
-    _prepare_edge_build,
+    dedupe_kernels,
     pair_edge_chunks,
+    prepare_edge_build,
 )
 from astribidem.kernel import resolve_workers
 
@@ -301,7 +301,7 @@ def build_edges_to_directory(
     memory throughout.
     """
     workers = resolve_workers(workers)
-    plan, kernels = _prepare_edge_build(
+    plan, kernels = prepare_edge_build(
         surveys,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
@@ -314,7 +314,7 @@ def build_edges_to_directory(
     _check_pair_file_names(plan.pair_radius_arcsec)
     segment = directory / SINGLE_SEGMENT
     _make_segment_directories(segment, with_rows=False)
-    outcomes, active = _dedupe_kernels(plan, kernels)
+    outcomes, active = dedupe_kernels(plan, kernels)
     for outcome in outcomes:
         _write_dedupe(segment, outcome)
     for (a, b), radius in plan.pair_radius_arcsec.items():

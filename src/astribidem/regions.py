@@ -30,7 +30,7 @@ import numpy as np
 
 from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
 from astribidem.edges import EdgeSettings, dedupe_from_pairs
-from astribidem.graph import connected_components
+from astribidem.graph import connected_components, positions_in
 from astribidem.kernel import CatalogKernel, resolve_workers
 
 MARGIN_BELOW = -1
@@ -345,8 +345,8 @@ def finish_handover(settings: EdgeSettings, handover: Handover) -> CandidateEdge
         rows, pending = rows[order], handover.pending[name][order]
         pending_rows = rows[pending]
         first, second = handover.self_pairs[name]
-        i = _positions(pending_rows, first)
-        j = _positions(pending_rows, second)
+        i = positions_in(pending_rows, first)
+        j = positions_in(pending_rows, second)
         keep = (i >= 0) & (j >= 0)
         dropped, kept, disputed = dedupe_from_pairs(pending_rows, i[keep], j[keep])
         inactive = np.concatenate([dropped, disputed])
@@ -363,17 +363,10 @@ def finish_handover(settings: EdgeSettings, handover: Handover) -> CandidateEdge
     pairs = {}
     for (a, b), radius in settings.pair_radius_arcsec.items():
         row_a, row_b, separation = handover.edges[(a, b)]
-        keep = (_positions(active[a], row_a) >= 0) & (_positions(active[b], row_b) >= 0)
+        keep = (positions_in(active[a], row_a) >= 0) & (
+            positions_in(active[b], row_b) >= 0
+        )
         pairs[frozenset((a, b))] = _pair(
             a, b, radius, row_a[keep], row_b[keep], separation[keep]
         )
     return CandidateEdges(surveys=tuple(surveys), pairs=pairs)
-
-
-def _positions(sorted_rows: np.ndarray, rows: np.ndarray) -> np.ndarray:
-    """Index of each of ``rows`` in ``sorted_rows``, or -1 when absent."""
-    if len(sorted_rows) == 0:
-        return np.full(len(rows), -1, dtype=np.int64)
-    index = np.searchsorted(sorted_rows, rows)
-    clipped = np.clip(index, 0, len(sorted_rows) - 1)
-    return np.where(sorted_rows[clipped] == rows, clipped, -1)

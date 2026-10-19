@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Mapping
 from itertools import combinations
 
@@ -11,10 +10,16 @@ import pyarrow.compute as pc
 from numpy.typing import ArrayLike
 
 from astribidem.candidate_edges import CandidateEdges
-from astribidem.edges import _build_prepared_edges, _prepare_edge_build
+from astribidem.edges import build_prepared_edges, prepare_edge_build
+from astribidem.index_table import (
+    DEDUPE_KEY,
+    RESOLVED_CONFIG_KEY,
+    encode_metadata,
+    row_column,
+)
 from astribidem.kernel import resolve_workers
 from astribidem.modes import CrossmatchModeConfig, mode_to_mapping
-from astribidem.uids import _as_arrow
+from astribidem.uids import as_arrow
 
 
 def _required_pairs(
@@ -81,12 +86,8 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
         for survey in edges.surveys
     }
     metadata = dict(table.schema.metadata or {})
-    metadata[b"astribidem.resolved_config"] = json.dumps(
-        provenance, sort_keys=True, separators=(",", ":"), allow_nan=False
-    ).encode()
-    metadata[b"astribidem.dedupe"] = json.dumps(
-        outcomes, sort_keys=True, separators=(",", ":"), allow_nan=False
-    ).encode()
+    metadata[RESOLVED_CONFIG_KEY] = encode_metadata(provenance)
+    metadata[DEDUPE_KEY] = encode_metadata(outcomes)
     return table.replace_schema_metadata(metadata)
 
 
@@ -110,7 +111,7 @@ def crossmatch(
     """
     names = tuple(surveys)
     workers = resolve_workers(workers)
-    settings, kernels = _prepare_edge_build(
+    settings, kernels = prepare_edge_build(
         surveys,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
@@ -119,7 +120,7 @@ def crossmatch(
         pairs=None if mode.requires_all_surveys() else _required_pairs(mode, names),
     )
     del surveys
-    edges = _build_prepared_edges(settings, kernels, workers=workers)
+    edges = build_prepared_edges(settings, kernels, workers=workers)
     del kernels
     return resolve(edges, mode)
 
@@ -141,10 +142,10 @@ def rows_to_ids(
     """
     id_columns = id_columns or {}
     for survey, values in ids.items():
-        row_column = f"{survey}/row_index"
+        rows = row_column(survey)
         table = table.set_column(
-            table.column_names.index(row_column),
+            table.column_names.index(rows),
             f"{survey}/{id_columns.get(survey, 'id')}",
-            pc.take(_as_arrow(values, name=survey, kind="IDs"), table[row_column]),
+            pc.take(as_arrow(values, name=survey, kind="IDs"), table[rows]),
         )
     return table

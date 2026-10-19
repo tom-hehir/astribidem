@@ -15,6 +15,14 @@ from dataclasses import dataclass
 import numpy as np
 
 
+def positions_in(sorted_values: np.ndarray, values: np.ndarray) -> np.ndarray:
+    """Index of each of ``values`` in ascending ``sorted_values``, or -1 when absent."""
+    if len(sorted_values) == 0:
+        return np.full(len(values), -1, dtype=np.int64)
+    index = np.clip(np.searchsorted(sorted_values, values), 0, len(sorted_values) - 1)
+    return np.where(sorted_values[index] == values, index, -1)
+
+
 def connected_components(
     n_nodes: int, first: np.ndarray, second: np.ndarray
 ) -> np.ndarray:

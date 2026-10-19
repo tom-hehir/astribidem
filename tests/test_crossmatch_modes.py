@@ -9,11 +9,11 @@ import pyarrow as pa
 import pytest
 
 from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
+from astribidem.index_table import index_summary
 from astribidem.modes import (
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
-    index_summary,
     one_to_one_pairs,
 )
 

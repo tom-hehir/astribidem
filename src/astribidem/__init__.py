@@ -28,13 +28,13 @@ from astribidem.edge_files import (
 from astribidem.edges import build_edges
 from astribidem.hub_and_spoke import SpatialLink, UIDLink, match_hub_and_spoke
 from astribidem.index_files import resolve_to_file
+from astribidem.index_table import index_summary
 from astribidem.kernel import CatalogKernel
 from astribidem.modes import (
     CrossmatchModeConfig,
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
-    index_summary,
     one_to_one_pairs,
 )
 from astribidem.uids import match_uids

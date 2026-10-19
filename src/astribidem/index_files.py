@@ -27,6 +27,7 @@ import pyarrow.parquet as pq
 
 from astribidem.api import resolve
 from astribidem.edge_files import read_edges, read_segment, segment_names
+from astribidem.index_table import DEDUPE_KEY, SUMMARY_KEY, encode_metadata
 from astribidem.modes import CrossmatchModeConfig
 
 _ROW_BITS = 40  # row numbers below 2**40; survey positions fill the bits above
@@ -58,11 +59,9 @@ def _merged(values: list, key: str | None = None):
 
 def _merged_metadata(metadatas: list[dict[bytes, bytes]]) -> dict[bytes, bytes]:
     merged = dict(metadatas[0])
-    for key in (b"astribidem.dedupe", b"astribidem.summary"):
+    for key in (DEDUPE_KEY, SUMMARY_KEY):
         combined = _merged([json.loads(metadata[key]) for metadata in metadatas])
-        merged[key] = json.dumps(
-            combined, sort_keys=True, separators=(",", ":"), allow_nan=False
-        ).encode()
+        merged[key] = encode_metadata(combined)
     return merged
 
 

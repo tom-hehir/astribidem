@@ -190,7 +190,6 @@ class CatalogKernel:
         k: int | None = None,
         *,
         workers: int = 1,
-        chunk_rows: int | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """In-radius cross pairs ``(i, j, sep_arcsec)``; ``i`` indexes ``self``.
 
@@ -203,14 +202,11 @@ class CatalogKernel:
 
         ``workers`` (``-1`` = all cores, ``1`` = serial one-shot) parallelizes
         the ``k=None`` join by chunking this kernel's rows; output is
-        bit-identical to the serial call. ``chunk_rows`` overrides the
-        automatic per-worker chunk sizing (mainly for tests).
+        bit-identical to the serial call.
         """
         chord = arcsec_to_chord(radius_arcsec)
         if k is None:
-            parts = list(
-                self._all_pairs_chunk_arrays(other, chord, workers, chunk_rows)
-            )
+            parts = list(self._all_pairs_chunk_arrays(other, chord, workers, None))
             if len(parts) == 1:
                 return parts[0]
             return tuple(  # type: ignore[return-value]

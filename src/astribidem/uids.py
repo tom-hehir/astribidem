@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from numbers import Integral
 from typing import Any
@@ -11,10 +10,15 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from astribidem.index_table import check_survey_names
+from astribidem.index_table import (
+    RESOLVED_CONFIG_KEY,
+    check_survey_names,
+    encode_metadata,
+    row_column,
+)
 
 
-def _as_arrow(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
+def as_arrow(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
     """Arrow values with exact integer identity, including uint64 above int64."""
     if isinstance(values, (pa.Array, pa.ChunkedArray)):
         return values
@@ -39,7 +43,7 @@ def _as_arrow(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArra
 
 def _identifiers(values: Any, *, name: str, kind: str) -> pa.Array | pa.ChunkedArray:
     """Unique, non-null integer or string values, converted exactly."""
-    array = _as_arrow(values, name=name, kind=kind)
+    array = as_arrow(values, name=name, kind=kind)
     if array.null_count:
         raise ValueError(f"source {name!r}: {kind} must be non-null")
     if not (
@@ -197,7 +201,7 @@ def match_uids(
     del comparable, ordered
     columns = {"entity_id": pa.array(np.arange(len(row_maps[anchor]), dtype=np.int64))}
     for name in names:
-        columns[f"{name}/row_index"] = pc.cast(row_maps.pop(name), pa.int64())
+        columns[row_column(name)] = pc.cast(row_maps.pop(name), pa.int64())
     provenance = {
         "method": "exact_uid",
         "join": join,
@@ -207,9 +211,5 @@ def match_uids(
         "null_keys": "reject",
         "ordering": "anchor_then_source_input_order",
     }
-    metadata = {
-        b"astribidem.resolved_config": json.dumps(
-            provenance, sort_keys=True, separators=(",", ":"), allow_nan=False
-        ).encode(),
-    }
+    metadata = {RESOLVED_CONFIG_KEY: encode_metadata(provenance)}
     return pa.table(columns).replace_schema_metadata(metadata)
