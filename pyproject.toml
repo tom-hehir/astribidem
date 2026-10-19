@@ -61,6 +61,8 @@ testpaths = ["tests"]
 markers = [
   "slow: starts processes or runs large randomised checks (deselect with -m \"not slow\")",
 ]
+# A warning raised from astribidem fails its test.
+filterwarnings = ["error:::astribidem"]
 
 [tool.ruff]
 line-length = 88

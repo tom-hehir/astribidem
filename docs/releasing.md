@@ -8,12 +8,15 @@ Use Python 3.14 to match CI and create a project environment:
 uv sync --locked --group dev --python 3.14
 uv run --no-sync pre-commit install
 uv run --no-sync pre-commit run --all-files
-uv run --no-sync pytest
+uv run --no-sync pytest -n auto
 uv build
 uv run --no-sync twine check --strict dist/*
 ```
 
-Update `uv.lock` with `uv lock` when changing dependencies. It fixes the
+`pytest -n auto` runs the suite in parallel; `-m "not slow"` skips the tests
+that start processes or run large randomised checks. A warning raised from
+astribidem fails its test. Update `uv.lock` with `uv lock` when changing
+dependencies. It fixes the
 development tools; consumers resolve the ranges in `pyproject.toml`. CI tests
 the built wheel with current compatible dependencies on Ubuntu and Python 3.14.
 The package still accepts Python 3.11+, but CI only exercises Python 3.14.

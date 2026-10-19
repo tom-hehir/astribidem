@@ -77,6 +77,7 @@ def test_merged_index_equals_resolving_everything_at_once(
     assert not list(tmp_path.glob(".*"))  # the per-segment files are removed
 
 
+@pytest.mark.slow
 def test_parallel_segments_give_the_same_index(banded, tmp_path):
     mode = EntitywiseCrossmatchConfig(resolver="split")
     resolve_to_file(banded, mode, tmp_path / "serial.parquet")

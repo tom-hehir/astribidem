@@ -101,6 +101,7 @@ def test_band_build_reproduces_the_in_memory_edges(tmp_path, band_height_arcsec)
     assert_same_edges(read_edges(edges_directory), in_memory(CATALOGS, **SETTINGS))
 
 
+@pytest.mark.slow
 def test_band_tasks_can_run_in_separate_processes(tmp_path):
     single, parallel = tmp_path / "single", tmp_path / "parallel"
     directory = layout(tmp_path, CATALOGS, 5.0)
