@@ -13,6 +13,7 @@ from astribidem import (
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
     crossmatch,
+    ids_to_rows,
     index_summary,
     rows_to_ids,
 )
@@ -203,3 +204,52 @@ def test_poles_and_wrapped_ra_remain_valid():
     )
     assert result["a/row_index"].to_pylist() == [0, 1]
     assert result["b/row_index"].to_pylist() == [0, 1]
+
+
+def test_ids_to_rows_inverts_rows_to_ids_with_typed_and_null_ids():
+    big = 2**63 + 5
+    ids = {"s": pa.array([big, big + 1], pa.uint64())}
+    matches = pa.table({"s/row_index": pa.array([1, None, 0], pa.int64())})
+    assert ids_to_rows(rows_to_ids(matches, ids), ids).equals(matches)
+
+
+def test_ids_to_rows_reads_a_named_id_column_and_casts_integer_widths():
+    matches = pa.table({"key": pa.array([20, 10], pa.int32()), "other": [1, 2]})
+    result = ids_to_rows(matches, {"s": [10, 20]}, id_columns={"s": "key"})
+    assert result.column_names == ["s/row_index", "other"]
+    assert result["s/row_index"].to_pylist() == [1, 0]
+
+
+def test_ids_to_rows_leaves_surveys_without_their_default_column():
+    matches = pa.table({"a/id": ["x"]})
+    assert ids_to_rows(matches, {"b": ["y"]}).equals(matches)
+
+
+@pytest.mark.parametrize(
+    "matches,ids,kwargs,message",
+    [
+        (pa.table({"s/id": [1]}), {"s": [1, 1]}, {}, "unique, non-null"),
+        (pa.table({"s/id": [1]}), {"s": [1, None]}, {}, "unique, non-null"),
+        (
+            pa.table({"key": [3]}),
+            {"s": [1, 2]},
+            {"id_columns": {"s": "key"}},
+            "missing",
+        ),
+        (
+            pa.table({"s/id": [1]}),
+            {"s": [1]},
+            {"id_columns": {"s": "key"}},
+            "no ID column",
+        ),
+        (
+            pa.table({"s/id": [1]}),
+            {"s": [1]},
+            {"id_columns": {"t": "key"}},
+            "not in ids",
+        ),
+    ],
+)
+def test_ids_to_rows_rejects_ambiguous_or_missing_ids(matches, ids, kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        ids_to_rows(matches, ids, **kwargs)

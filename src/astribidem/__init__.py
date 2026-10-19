@@ -2,7 +2,7 @@
 
 from importlib.metadata import version
 
-from astribidem.api import crossmatch, resolve, rows_to_ids
+from astribidem.api import crossmatch, ids_to_rows, resolve, rows_to_ids
 from astribidem.audit import audit_edges
 from astribidem.banded import (
     build_band,
@@ -60,6 +60,7 @@ __all__ = [
     "build_edges_to_directory",
     "combine_segments",
     "crossmatch",
+    "ids_to_rows",
     "index_summary",
     "match_hub_and_spoke",
     "match_uids",

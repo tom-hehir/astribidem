@@ -16,7 +16,7 @@ Names explicitly exported from `astribidem` are the supported alpha interface.
 | Choose association policy | `DegenerateCrossmatchConfig`, `EntitywiseCrossmatchConfig`, `EntitySelectionConfig`, `CrossmatchModeConfig` |
 | Apply a pair policy to candidate pairs you found yourself | `one_to_one_pairs` (with `CatalogKernel.all_pairs`) |
 | Match shared identifiers | `match_uids`, `match_hub_and_spoke`, `UIDLink`, `SpatialLink` |
-| Use results | `rows_to_ids`, `index_summary` |
+| Use results | `rows_to_ids`, `ids_to_rows`, `index_summary` |
 | Reuse candidate searches | `build_edges`, `resolve`, `audit_edges`, `CandidateEdges`, `PairEdges`, `DedupeOutcome` |
 | Save candidate searches | `write_edges`, `read_edges`, `build_edges_to_directory` |
 | Build and resolve large catalogues | `write_band_layout`, `build_edges_by_band`, `resolve_to_file` |
@@ -79,6 +79,12 @@ does not validate caller IDs for uniqueness or scientific meaning. Supply one
 ID per original input row in the same order. A saved row index alone cannot
 identify a reordered catalogue: retain the source revision and row-order
 provenance alongside it, or map to your own persistent IDs.
+
+`ids_to_rows` is the inverse: it turns a match table's ID columns back into
+row positions, given the same per-row IDs, which must then be unique and
+non-null. Its `id_columns` names whole columns (`{"s": "key"}` reads column
+`key`), so it can read match tables built elsewhere; an ID missing from the
+lookup raises instead of becoming null.
 
 ## Saved files
 

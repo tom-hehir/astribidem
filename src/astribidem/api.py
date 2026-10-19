@@ -149,3 +149,57 @@ def rows_to_ids(
             pc.take(as_arrow(values, name=survey, kind="IDs"), table[rows]),
         )
     return table
+
+
+def ids_to_rows(
+    matches: pa.Table,
+    ids: Mapping[str, object],
+    *,
+    id_columns: Mapping[str, str] | None = None,
+) -> pa.Table:
+    """Replace each survey's ID column of a match table by its row positions.
+
+    The inverse of ``rows_to_ids``. Each survey's ID column, ``<survey>/id``
+    unless ``id_columns`` gives another column name, is looked up in
+    ``ids[survey]``, which holds one ID per input row in input order, and
+    becomes ``<survey>/row_index``. Null IDs stay null. Surveys not named in
+    ``ids``, and surveys whose default ID column is absent, are left as they
+    are; a survey named in ``id_columns`` must have that column. Integer IDs
+    of different widths, and string IDs of either string type, are compared
+    after casting the table's IDs to the type of ``ids[survey]``.
+
+    Raises:
+        ValueError: ``ids[survey]`` holds a duplicate or null ID, which would
+            make the lookup ambiguous; or the table holds an ID missing from
+            ``ids[survey]``, which would otherwise become a null row.
+    """
+    id_columns = id_columns or {}
+    unknown = set(id_columns) - set(ids)
+    if unknown:
+        raise ValueError(f"id_columns names surveys not in ids: {sorted(unknown)}")
+    for survey, values in ids.items():
+        column = id_columns.get(survey, f"{survey}/id")
+        if column not in matches.column_names:
+            if survey in id_columns:
+                raise ValueError(f"match table has no ID column {column!r}")
+            continue
+        lookup = as_arrow(values, name=survey, kind="IDs")
+        # count_distinct skips nulls, so a null lookup ID also fails here.
+        if pc.count_distinct(lookup).as_py() != len(lookup):
+            raise ValueError(f"ids[{survey!r}] must hold unique, non-null IDs")
+        table_ids = matches[column]
+        if table_ids.type != lookup.type:
+            table_ids = pc.cast(table_ids, lookup.type)
+        positions = pc.index_in(table_ids, value_set=lookup)
+        missing = pc.and_(pc.is_valid(table_ids), pc.is_null(positions))
+        if pc.any(missing).as_py():
+            examples = pc.filter(table_ids, missing).slice(0, 5).to_pylist()
+            raise ValueError(
+                f"match table holds IDs missing from ids[{survey!r}]: {examples}"
+            )
+        matches = matches.set_column(
+            matches.column_names.index(column),
+            row_column(survey),
+            pc.cast(positions, pa.int64()),
+        )
+    return matches
