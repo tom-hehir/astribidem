@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "astribidem"
-version = "0.0.0a0"
+version = "0.0.0a1"
 description = "Astronomical catalogue matching with explicit association policies and Arrow indexes."
 readme = "README.md"
 license = "MIT"

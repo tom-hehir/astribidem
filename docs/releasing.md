@@ -65,8 +65,9 @@ accessible before announcing a public release.
 
 1. Merge the release preparation and confirm CI is green.
 2. Check `pyproject.toml`, `CHANGELOG.md` and documentation for the intended
-   version. The initial version is `0.0.0a0`.
-3. Create and push the immutable tag `v0.0.0a0` at the tested commit.
+   version (alpha releases are numbered `0.0.0aN`).
+3. Create and push the immutable tag `v<version>`, for example `v0.0.0a1`, at
+   the tested commit.
 4. Publish a GitHub release for that tag, marking alpha versions as prereleases.
 
 The `release: published` event handles both prereleases and final releases.
