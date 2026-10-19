@@ -105,6 +105,6 @@ still holds coordinates, trees and dedupe results in memory. Banded spatial
 matching reduces this to individual bands and boundary groups; memory depends
 on density, candidate count and concurrency, not just catalogue row count.
 Choose a band height that fits the densest band and a boundary carry limit.
-`resolve_to_file` sorts with DuckDB from `astribidem[large]`; its sort memory
+`resolve_to_file` sorts with DuckDB from `astribidem[out-of-core]`; its sort memory
 limit does not bound the memory of resolving one segment. See
 [candidate edges](candidate-edges.md) for the full workflow.

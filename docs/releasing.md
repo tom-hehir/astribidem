@@ -25,7 +25,7 @@ are defined in separate reusable workflow files:
 - `pre-commit.yml` runs formatting and static checks.
 - `build.yml` builds the source distribution and a wheel from it, checks package
   metadata and README rendering, and uploads the distributions.
-- `test.yml` checks isolated base and `large` installations without test
+- `test.yml` checks isolated base and `out-of-core` installations without test
   dependencies, then runs the full suite against the built wheel and retains
   coverage XML as a workflow artifact.
 

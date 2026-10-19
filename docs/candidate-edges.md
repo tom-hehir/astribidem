@@ -174,8 +174,8 @@ sorts the per-segment indexes into the usual entity order: first present
 survey, then that survey's row. The file equals
 `resolve(read_edges(...), mode)`, metadata included.
 
-The sort runs in DuckDB, installed with the `large` extra
-(`astribidem[large]`). DuckDB spills to disk beyond `memory_limit`, such
+The sort runs in DuckDB, installed with the `out-of-core` extra
+(`astribidem[out-of-core]`). DuckDB spills to disk beyond `memory_limit`, such
 as `"4GB"`, using `threads` threads; when the limit is too small for the
 threads, the sort stops with a `MemoryError`. DuckDB could write the sorted
 index to Parquet itself, which is faster, but it would choose the column types

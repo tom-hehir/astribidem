@@ -19,7 +19,7 @@ Names explicitly exported from `astribidem` are the supported alpha interface.
 | Use results | `rows_to_ids`, `ids_to_rows`, `index_summary` |
 | Reuse candidate searches | `build_edges`, `resolve`, `audit_edges`, `CandidateEdges`, `PairEdges`, `DedupeOutcome` |
 | Save candidate searches | `write_edges`, `read_edges`, `read_edges_metadata`, `build_edges_to_directory` |
-| Build and resolve large catalogues | `write_band_layout`, `as_chunks`, `build_edges_by_band`, `resolve_to_file` |
+| Build and resolve catalogues larger than memory | `write_band_layout`, `as_chunks`, `build_edges_by_band`, `resolve_to_file` |
 | Coordinate separate workers | `prepare_band_build`, `build_band`, `sweep_boundaries`, `read_segment`, `segment_names` |
 | Query the geometric kernel | `CatalogKernel` |
 | Inspect the installed release | `__version__` |

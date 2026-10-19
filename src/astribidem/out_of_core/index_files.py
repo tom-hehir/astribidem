@@ -8,7 +8,7 @@ the per-segment indexes are sorted into the global entity order: first
 present survey, then that survey's row. The result then equals
 ``resolve(read_edges(directory), mode)``, metadata included.
 
-The sort runs in DuckDB, the optional ``large`` dependency, which spills to
+The sort runs in DuckDB, the optional ``out-of-core`` dependency, which spills to
 disk beyond ``memory_limit``. DuckDB could write the sorted index to Parquet
 itself, which is faster, but it would choose the column types and drop the
 index metadata; its rows instead stream back a batch at a time and are written
@@ -79,7 +79,7 @@ def _sorted_batches(paths, schema, work: Path, memory_limit, threads):
         import duckdb
     except ImportError as exc:
         raise ImportError(
-            "sorting segments needs DuckDB: install astribidem[large]"
+            "sorting segments needs DuckDB: install astribidem[out-of-core]"
         ) from exc
     rows = [_quote(n) for n in schema.names if n.endswith("/row_index")]
     # The entity order: first present survey, then that survey's row.

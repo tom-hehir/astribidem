@@ -29,8 +29,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Sorting large saved edges' indexes (resolve_to_file).
-large = ["duckdb>=1.5"]
+# DuckDB sorts the index in resolve_to_file; the band build itself needs nothing extra.
+out-of-core = ["duckdb>=1.5"]
 test = ["pytest>=8", "astropy>=6", "duckdb>=1.5"]
 dev = [
   "pytest>=8", "astropy>=6", "duckdb>=1.5", "ruff==0.16.9",

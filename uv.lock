@@ -28,7 +28,7 @@ dev = [
     { name = "ruff" },
     { name = "twine" },
 ]
-large = [
+out-of-core = [
     { name = "duckdb" },
 ]
 test = [
@@ -43,7 +43,7 @@ requires-dist = [
     { name = "astropy", marker = "extra == 'test'", specifier = ">=6" },
     { name = "coverage", extras = ["toml"], marker = "extra == 'dev'", specifier = ">=7" },
     { name = "duckdb", marker = "extra == 'dev'", specifier = ">=1.5" },
-    { name = "duckdb", marker = "extra == 'large'", specifier = ">=1.5" },
+    { name = "duckdb", marker = "extra == 'out-of-core'", specifier = ">=1.5" },
     { name = "duckdb", marker = "extra == 'test'", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4" },
@@ -54,7 +54,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.11.1" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=6" },
 ]
-provides-extras = ["large", "test", "dev"]
+provides-extras = ["out-of-core", "test", "dev"]
 
 [[package]]
 name = "astropy"

@@ -22,14 +22,14 @@ jobs:
         with:
           name: python-distributions
           path: dist
-      - name: Check base and large installations without test dependencies
+      - name: Check base and out-of-core installations without test dependencies
         run: |
           wheel=(dist/*.whl)
-          for extra in base large; do
+          for extra in base out-of-core; do
             environment=".smoke-$extra"
             uv venv "$environment"
             requirement="${wheel[0]}"
-            if [[ "$extra" == large ]]; then requirement+="[large]"; fi
+            if [[ "$extra" == out-of-core ]]; then requirement+="[out-of-core]"; fi
             uv pip install --python "$environment" "$requirement"
             uv run --no-project --python "$environment" python scripts/smoke_install.py "$extra"
           done
