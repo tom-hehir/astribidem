@@ -142,7 +142,7 @@ def resolve_to_file(
         paths = [work / f"{name}.parquet" for name in names]
         tasks = [
             (str(edges_directory), name, mode, str(path))
-            for name, path in zip(names, paths)
+            for name, path in zip(names, paths, strict=True)
         ]
         if processes > 1:
             with ProcessPoolExecutor(processes) as pool:

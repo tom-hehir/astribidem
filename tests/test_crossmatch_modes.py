@@ -131,6 +131,7 @@ def test_entitywise_clean_pair_and_singletons():
         zip(
             table.column("a/row_index").to_pylist(),
             table.column("b/row_index").to_pylist(),
+            strict=True,
         )
     )
     assert rows == {(0, 0), (1, None), (None, 1)}
@@ -187,6 +188,7 @@ def test_entitywise_split_resolver_partitions_chain():
         zip(
             table.column("a/row_index").to_pylist(),
             table.column("b/row_index").to_pylist(),
+            strict=True,
         )
     )
     assert rows == {(0, 0), (1, None)}
@@ -207,6 +209,7 @@ def test_entitywise_sequential_resolver_uses_priority():
         zip(
             result.column("a/row_index").to_pylist(),
             result.column("b/row_index").to_pylist(),
+            strict=True,
         )
     )
     assert rows == {(1, 0), (0, None)}
@@ -244,6 +247,7 @@ def test_entitywise_selection_filters_after_resolution():
         zip(
             must.column("a/row_index").to_pylist(),
             must.column("b/row_index").to_pylist(),
+            strict=True,
         )
     )
     assert rows == {(0, 0), (None, 1)}
@@ -262,6 +266,7 @@ def test_entitywise_absent_surveys_are_null_rows():
         zip(
             table.column("a/row_index").to_pylist(),
             table.column("b/row_index").to_pylist(),
+            strict=True,
         )
     )
     assert rows == {(0, None), (None, 0)}
@@ -285,7 +290,11 @@ def test_entitywise_orders_entities_by_first_present_survey_then_row():
     )
     table = EntitywiseCrossmatchConfig().build(inputs)
     assert list(
-        zip(table["a/row_index"].to_pylist(), table["b/row_index"].to_pylist())
+        zip(
+            table["a/row_index"].to_pylist(),
+            table["b/row_index"].to_pylist(),
+            strict=True,
+        )
     ) == [(0, None), (1, None), (2, 3), (3, None), (4, 1), (None, 0), (None, 2)]
     assert table["disputed_reason"].to_pylist() == [
         None,

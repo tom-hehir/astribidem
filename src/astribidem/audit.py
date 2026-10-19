@@ -28,7 +28,8 @@ def _percentiles(values: np.ndarray) -> dict[str, float] | None:
         return None
     points = np.percentile(values, _SEPARATION_PERCENTILES)
     return {
-        f"p{p}": round(float(v), 4) for p, v in zip(_SEPARATION_PERCENTILES, points)
+        f"p{p}": round(float(v), 4)
+        for p, v in zip(_SEPARATION_PERCENTILES, points, strict=True)
     }
 
 

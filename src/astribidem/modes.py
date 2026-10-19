@@ -559,6 +559,7 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
                 graph.first[edge_mask].tolist(),
                 graph.second[edge_mask].tolist(),
                 graph.edge_sep[edge_mask].tolist(),
+                strict=True,
             ):
                 neighbors.setdefault(u, {})[v] = w
                 neighbors.setdefault(v, {})[u] = w

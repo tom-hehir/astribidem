@@ -41,7 +41,7 @@ SETTINGS = {
 
 def assert_same_edges(left, right):
     assert left.survey_names == right.survey_names
-    for x, y in zip(left.surveys, right.surveys):
+    for x, y in zip(left.surveys, right.surveys, strict=True):
         assert (x.name, x.n_rows, x.dedupe_radius_arcsec) == (
             y.name,
             y.n_rows,
@@ -142,7 +142,7 @@ def test_chunk_stream_concatenates_to_the_complete_join():
     chunks = list(a.all_pairs_chunks(b, 5.0, workers=3, chunk_rows=37))
     assert len(chunks) == 11
     joined = [np.concatenate([chunk[k] for chunk in chunks]) for k in range(3)]
-    for part, whole in zip(joined, a.all_pairs(b, 5.0)):
+    for part, whole in zip(joined, a.all_pairs(b, 5.0), strict=True):
         np.testing.assert_array_equal(part, whole)
 
 
@@ -235,7 +235,7 @@ def test_segments_save_their_rows_and_reload(tmp_path):
 
     edges = build_edges(PATCHES, **SETTINGS)
     segments = [restrict(edges, rows) for rows in PATCH_ROWS]
-    for name, segment in zip(["band-0", "band-1"], segments):
+    for name, segment in zip(["band-0", "band-1"], segments, strict=True):
         write_segment(tmp_path, name, segment)
     write_metadata(
         tmp_path,

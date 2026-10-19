@@ -103,7 +103,9 @@ def build_region(
     names = settings.survey_names
     loaded = {name: region[name] for name in names}
     sizes = {name: len(loaded[name].rows) for name in names}
-    offsets = dict(zip(names, np.cumsum([0, *[sizes[n] for n in names]])[:-1]))
+    offsets = dict(
+        zip(names, np.cumsum([0, *[sizes[n] for n in names]])[:-1], strict=True)
+    )
     n_nodes = sum(sizes.values())
     kernels = {
         name: CatalogKernel(loaded[name].ra, loaded[name].dec, name=name)
@@ -311,7 +313,9 @@ def combine_handovers(handovers: Sequence[Handover]) -> Handover:
         rows={n: np.concatenate([h.rows[n] for h in handovers]) for n in names},
         pending={n: np.concatenate([h.pending[n] for h in handovers]) for n in names},
         piece={
-            n: np.concatenate([h.piece[n] + o for h, o in zip(handovers, offsets)])
+            n: np.concatenate(
+                [h.piece[n] + o for h, o in zip(handovers, offsets, strict=True)]
+            )
             for n in names
         },
         touches=np.concatenate([h.touches for h in handovers]),

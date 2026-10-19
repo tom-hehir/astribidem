@@ -82,7 +82,7 @@ def make_overlapping_catalogs(
     common_ra, common_dec = _sample_regime(rng, n_common, regime)
 
     catalogs = []
-    for cat_idx in range(n_catalogs):
+    for _ in range(n_catalogs):
         offsets = rng.uniform(0.0, offset_arcsec, size=n_common)
         angles = rng.uniform(0.0, 2 * np.pi, size=n_common)
         ra_match, dec_match = _offset_in_degrees(common_ra, common_dec, offsets, angles)
@@ -145,7 +145,7 @@ def anchored_nearest(coords, radius_arcsec: float) -> np.ndarray:
     names = [f"catalog{i}" for i in range(len(coords))]
     index = match_hub_and_spoke(
         anchor=names[0],
-        coordinates=dict(zip(names, coords)),
+        coordinates=dict(zip(names, coords, strict=True)),
         links={
             name: SpatialLink(radius_arcsec, "anchored_nearest") for name in names[1:]
         },
@@ -158,7 +158,7 @@ def mutual_nearest(coords, radius_arcsec: float) -> np.ndarray:
     """A ``mutual_nearest`` subset join over every catalogue, dedupe disabled."""
     names = [f"catalog{i}" for i in range(len(coords))]
     index = crossmatch(
-        dict(zip(names, coords)),
+        dict(zip(names, coords, strict=True)),
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=0.0,
         mode=DegenerateCrossmatchConfig(surveys=names, policy="mutual_nearest"),
