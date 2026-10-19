@@ -270,3 +270,10 @@ def test_ids_to_rows_leaves_surveys_without_their_default_column():
 def test_ids_to_rows_rejects_ambiguous_or_missing_ids(matches, ids, kwargs, message):
     with pytest.raises(ValueError, match=message):
         ids_to_rows(matches, ids, **kwargs)
+
+
+@pytest.mark.parametrize("radius", [0.0, -1.0])
+def test_crossmatch_refuses_a_matching_radius_that_is_not_positive(radius):
+    sources = {"a": survey([0]), "b": survey([0.2])}
+    with pytest.raises(ValueError, match="positive number of arcseconds"):
+        resolve(sources, radius_arcsec=radius)

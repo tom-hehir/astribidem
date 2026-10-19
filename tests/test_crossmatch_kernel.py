@@ -146,3 +146,10 @@ def test_radec_chord_roundtrip():
     assert sep[0] == pytest.approx(0.7, abs=1e-12)
     xyz = radec_to_xyz(np.array([120.0]), np.array([-45.0]))
     assert np.linalg.norm(xyz[0]) == pytest.approx(1.0, abs=1e-15)
+
+
+@pytest.mark.parametrize("radius", [0.0, -1.0, float("nan")])
+def test_all_pairs_refuses_a_radius_that_is_not_positive_and_finite(radius):
+    kernel = CatalogKernel(np.array([10.0]), np.array([0.0]))
+    with pytest.raises(ValueError, match="positive number of arcseconds"):
+        kernel.all_pairs(kernel, radius)

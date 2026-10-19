@@ -22,7 +22,7 @@ from astribidem.index_table import (
     encode_metadata,
     row_column,
 )
-from astribidem.kernel import CatalogKernel, resolve_workers
+from astribidem.kernel import CatalogKernel, check_match_radius, resolve_workers
 from astribidem.modes import DegenerateCrossmatchConfig
 from astribidem.uids import match_uids
 
@@ -38,6 +38,9 @@ class SpatialLink:
 
     radius_arcsec: float
     policy: str = "mutual_nearest"
+
+    def __post_init__(self) -> None:
+        check_match_radius(self.radius_arcsec, "SpatialLink.radius_arcsec")
 
 
 def match_hub_and_spoke(

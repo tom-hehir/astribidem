@@ -22,6 +22,7 @@ from astribidem.graph import (
 from astribidem.index_table import check_survey_names
 from astribidem.kernel import (
     CatalogKernel,
+    check_match_radius,
     resolve_workers,
 )
 
@@ -288,9 +289,11 @@ def radius_by_pair(
     """Each survey pair's matching radius: its entry in ``overrides``, else ``default``.
 
     Raises:
-        ValueError: an override names something other than two of ``names``, or
-            names one pair twice (for example both ``("a", "b")`` and
-            ``("b", "a")``), which would make its radius ambiguous.
+        ValueError: a radius is not a positive finite number (a non-positive
+            one would silently match nothing, or everything as if positive), an
+            override names something other than two of ``names``, or names one
+            pair twice (for example both ``("a", "b")`` and ``("b", "a")``),
+            which would make its radius ambiguous.
     """
     radii = {frozenset(pair): float(default) for pair in combinations(names, 2)}
     overridden: set[frozenset[str]] = set()
@@ -306,6 +309,8 @@ def radius_by_pair(
             )
         overridden.add(key)
         radii[key] = float(radius)
+    for key, radius in radii.items():
+        check_match_radius(radius, f"matching radius for {sorted(key)}")
     return radii
 
 

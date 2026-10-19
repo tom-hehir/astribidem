@@ -97,6 +97,22 @@ def xyz_to_radec(xyz: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return ra, dec
 
 
+def check_match_radius(radius_arcsec: float, what: str = "matching radius") -> None:
+    """Refuse a matching radius that is not a positive, finite number.
+
+    A non-positive radius does not fail on its own: zero matches nothing, and a
+    negative one becomes a negative chord that the tree treats as positive, so
+    either would silently give a wrong match.
+
+    Raises:
+        ValueError: ``radius_arcsec`` is not a positive finite number.
+    """
+    if not (math.isfinite(radius_arcsec) and radius_arcsec > 0):
+        raise ValueError(
+            f"{what} must be a positive number of arcseconds, got {radius_arcsec!r}"
+        )
+
+
 def arcsec_to_chord(radius_arcsec: float) -> float:
     """Great-circle arcseconds to the unit-sphere chord length."""
     return 2.0 * math.sin(radius_arcsec * _ARCSEC_TO_RAD / 2.0)
@@ -185,7 +201,11 @@ class CatalogKernel:
         ``workers`` (``-1`` = all cores, ``1`` = serial one-shot) parallelizes
         the ``k=None`` join by chunking this kernel's rows; output is
         bit-identical to the serial call.
+
+        Raises:
+            ValueError: ``radius_arcsec`` is not a positive finite number.
         """
+        check_match_radius(radius_arcsec)
         chord = arcsec_to_chord(radius_arcsec)
         if k is None:
             parts = list(self._all_pairs_chunk_arrays(other, chord, workers, None))

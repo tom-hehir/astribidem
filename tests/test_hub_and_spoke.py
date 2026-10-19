@@ -449,3 +449,11 @@ def test_mixed_calls_prepare_fresh_kernels(monkeypatch):
         )
         assert result.num_rows == expected
     assert prepared == ["a", "b", "a", "b"]
+
+
+@pytest.mark.parametrize("radius", [0.0, -1.0, float("nan"), float("inf")])
+def test_spatial_link_refuses_a_radius_that_is_not_positive_and_finite(radius):
+    # Zero would match nothing and a negative radius would match as if it were
+    # positive, both without an error.
+    with pytest.raises(ValueError, match="positive number of arcseconds"):
+        SpatialLink(radius_arcsec=radius)
