@@ -48,6 +48,9 @@ packages = ["src/astribidem"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "slow: starts processes or runs large randomised checks (deselect with -m \"not slow\")",
+]
 
 [tool.ruff]
 line-length = 88
