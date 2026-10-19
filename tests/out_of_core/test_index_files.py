@@ -19,9 +19,9 @@ from astribidem import (
     write_edges,
 )
 from astribidem.edge_files import segment_names
-from astribidem.index_files import resolve_to_file
+from astribidem.out_of_core.index_files import resolve_to_file
 
-FIXTURES = Path(__file__).with_name("fixtures")
+FIXTURES = Path(__file__).parents[1] / "fixtures"
 sys.path.insert(0, str(FIXTURES))
 from aion_parity_cases import (  # noqa: E402 — fixture path is set above
     DEDUPE_RADIUS_ARCSEC,

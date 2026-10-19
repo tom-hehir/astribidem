@@ -16,7 +16,7 @@ from astribidem import (
     resolve,
     segment_names,
 )
-from astribidem.banded import (
+from astribidem.out_of_core.banded import (
     as_chunks,
     build_band,
     build_edges_by_band,
@@ -26,7 +26,7 @@ from astribidem.banded import (
     write_band_layout,
 )
 
-FIXTURES = Path(__file__).with_name("fixtures")
+FIXTURES = Path(__file__).parents[1] / "fixtures"
 sys.path.insert(0, str(FIXTURES))
 from aion_parity_cases import (  # noqa: E402 — fixture path is set above
     DEDUPE_RADIUS_ARCSEC,

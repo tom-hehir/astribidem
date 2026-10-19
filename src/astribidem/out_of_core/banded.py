@@ -41,7 +41,7 @@ from astribidem.edges import EdgeSettings, edge_settings
 from astribidem.graph import connected_components, positions_in
 from astribidem.index_table import check_survey_names, pair_name
 from astribidem.kernel import float64_coordinates
-from astribidem.regions import (
+from astribidem.out_of_core.regions import (
     MARGIN_ABOVE,
     MARGIN_BELOW,
     OWNED,
