@@ -503,7 +503,9 @@ def sweep_boundaries(
         [f"band-{band}" for band in plan["bands"]] + boundary_segments,
         extra={"band_height_deg": plan["band_height_deg"]},
     )
-    shutil.rmtree(handover_root)
+    # A build with no rows has no bands, so no band task created the directory.
+    if handover_root.exists():
+        shutil.rmtree(handover_root)
     (edges_directory / _PLAN).unlink()
 
 

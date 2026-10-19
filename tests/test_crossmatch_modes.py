@@ -111,7 +111,7 @@ def test_degenerate_three_way_requires_all_pairwise_agreement():
 
 
 def test_degenerate_anchored_policy_restricted_to_two_surveys():
-    with pytest.raises(ValueError, match="two-survey legacy policy"):
+    with pytest.raises(ValueError, match="two-survey policy"):
         DegenerateCrossmatchConfig(surveys=["a", "b", "c"], policy="anchored_nearest")
     with pytest.raises(ValueError, match="at least two surveys"):
         DegenerateCrossmatchConfig(surveys=["a"])

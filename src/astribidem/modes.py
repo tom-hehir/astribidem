@@ -162,8 +162,8 @@ def one_to_one_pairs(
     """Reduce a pair's candidate edges under a policy.
 
     Returns matched ``(row_a, row_b, sep_arcsec)``, sorted by ``row_a``. For
-    the mutual policies the result is one-to-one; the anchored legacy policies
-    are one-directional — a b-row may be claimed by several a-rows.
+    the mutual policies the result is one-to-one; the anchored policies are
+    one-directional — a b-row may be claimed by several a-rows.
     """
     row_a = np.asarray(row_a, dtype=np.int64)
     row_b = np.asarray(row_b, dtype=np.int64)
@@ -231,7 +231,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
             )
         if self.policy.startswith("anchored_") and len(self.surveys) != 2:
             raise ValueError(
-                f"{self.policy} is a two-survey legacy policy; got "
+                f"{self.policy} is a two-survey policy; got "
                 f"{len(self.surveys)} surveys. Use a mutual policy for larger "
                 "subsets."
             )
@@ -463,7 +463,7 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
     ``resolver`` decides the ambiguous components (clean components always
     become entities): ``refuse`` (the conservative default) dissolves them to
     flagged singletons; ``sequential`` (R3a) resolves by a declared survey
-    ``priority``; ``split`` (R3b) resolves by best-scoring constrained split.
+    ``priority``; ``split`` (R3b) groups rows greedily by complete linkage.
     R3a/R3b emit resolved groups as ordinary (unflagged) entities and dissolve
     only components larger than ``size_cap``. ``disputed`` (``singleton`` /
     ``drop``) governs the flagged rows — dissolved-component members and

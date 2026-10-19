@@ -1,8 +1,7 @@
 """Graph utilities over candidate edges: components and clique verdicts.
 
-These are the canonical primitives the design reduces to (see
-``docs/crossmatching.md``): connected components via ``scipy.sparse.csgraph``
-and clique tests by edge counting. A component with ``k`` nodes is a clique
+Connected components come from ``scipy.sparse.csgraph``; clique tests count
+edges. A component with ``k`` nodes is a clique
 iff it has exactly ``k(k-1)/2`` edges — and because edges exist precisely
 when a pair is within its radius, the edge count *is* the
 all-pairs-within-radius test. Verification, not search: no clique is ever

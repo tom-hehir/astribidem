@@ -144,3 +144,24 @@ def test_scattered_segments_sort_correctly_within_a_small_memory_limit(tmp_path)
     with pytest.raises(MemoryError, match="raise memory_limit or lower threads"):
         resolve_to_file(edges, mode, path, memory_limit="1MB", threads=1)
     assert not list(tmp_path.glob(".*"))  # scratch files are removed either way
+
+
+def test_catalogues_with_no_rows_give_an_empty_index(tmp_path):
+    empty = (np.empty(0), np.empty(0))
+    write_band_layout(
+        tmp_path / "layout",
+        {"a": as_chunks(*empty, 10), "b": as_chunks(*empty, 10)},
+        band_height_deg=1.0,
+    )
+    build_edges_by_band(
+        tmp_path / "layout",
+        tmp_path / "edges",
+        radius_arcsec=1.0,
+        dedupe_radius_arcsec=0.0,
+    )
+    assert segment_names(tmp_path / "edges") == []
+    mode = EntitywiseCrossmatchConfig()
+    resolve_to_file(tmp_path / "edges", mode, tmp_path / "index.parquet")
+    index = pq.read_table(tmp_path / "index.parquet")
+    assert index.num_rows == 0
+    assert index.equals(resolve(read_edges(tmp_path / "edges"), mode))

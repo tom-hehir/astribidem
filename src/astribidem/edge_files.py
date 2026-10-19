@@ -244,10 +244,42 @@ def read_edges(directory: str | Path) -> CandidateEdges:
 
     Every segment is loaded and combined, so this suits edges that fit in
     memory; use ``read_segment`` to process large builds one segment at a time.
+    A build from catalogues with no rows has no segments and reloads as edges
+    covering no rows.
     """
-    return combine_segments(
-        [read_segment(directory, name) for name in segment_names(directory)]
+    names = segment_names(directory)
+    if not names:
+        return _empty_edges(read_metadata(directory))
+    return combine_segments([read_segment(directory, name) for name in names])
+
+
+def _empty_edges(metadata: dict) -> CandidateEdges:
+    """Edges with every survey and pair in ``metadata``, covering no rows."""
+    empty = np.empty(0, dtype=np.int64)
+    surveys = tuple(
+        DedupeOutcome(
+            name=entry["name"],
+            n_rows=entry["n_rows"],
+            dedupe_radius_arcsec=entry["dedupe_radius_arcsec"],
+            dropped_rows=empty,
+            kept_rows=empty,
+            disputed_rows=empty,
+            rows=empty,
+        )
+        for entry in metadata["surveys"]
     )
+    pairs = {
+        frozenset(entry["surveys"]): PairEdges(
+            survey_a=entry["surveys"][0],
+            survey_b=entry["surveys"][1],
+            radius_arcsec=entry["radius_arcsec"],
+            row_a=empty,
+            row_b=empty,
+            separation_arcsec=np.empty(0, dtype=np.float64),
+        )
+        for entry in metadata["pairs"]
+    }
+    return CandidateEdges(surveys=surveys, pairs=pairs)
 
 
 def build_edges_to_directory(

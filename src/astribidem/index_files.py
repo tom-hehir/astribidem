@@ -26,7 +26,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from astribidem.api import resolve
-from astribidem.edge_files import read_segment, segment_names
+from astribidem.edge_files import read_edges, read_segment, segment_names
 from astribidem.modes import CrossmatchModeConfig
 
 _ROW_BITS = 40  # row numbers below 2**40; survey positions fill the bits above
@@ -132,6 +132,10 @@ def resolve_to_file(
     edges_directory = Path(edges_directory)
     index_path = Path(index_path)
     names = segment_names(edges_directory)
+    if not names:
+        # Edges built from catalogues with no rows: write the empty index.
+        pq.write_table(resolve(read_edges(edges_directory), mode), index_path)
+        return
     work = index_path.with_name(f".{index_path.name}.segments")
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
