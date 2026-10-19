@@ -39,7 +39,7 @@ from astribidem.candidate_edges import DedupeOutcome
 from astribidem.edge_files import write_metadata, write_segment
 from astribidem.edges import EdgeSettings, edge_settings
 from astribidem.graph import connected_components, positions_in
-from astribidem.index_table import check_survey_names
+from astribidem.index_table import check_survey_names, pair_name
 from astribidem.kernel import float64_coordinates
 from astribidem.regions import (
     MARGIN_ABOVE,
@@ -314,7 +314,7 @@ def _write_handover(directory: Path, settings: EdgeSettings, handover: Handover)
     for (a, b), (row_a, row_b, separation) in handover.edges.items():
         pq.write_table(
             pa.table({"row_a": row_a, "row_b": row_b, "separation_arcsec": separation}),
-            directory / f"edges-{a}__{b}.parquet",
+            directory / f"edges-{pair_name(a, b)}.parquet",
         )
     pq.write_table(
         pa.table({"below": handover.touches[:, 0], "above": handover.touches[:, 1]}),
@@ -333,7 +333,7 @@ def _read_handover(directory: Path, settings: EdgeSettings) -> Handover:
         self_pairs[name] = (pairs["first"].to_numpy(), pairs["second"].to_numpy())
     edges = {}
     for a, b in settings.pair_radius_arcsec:
-        table = pq.read_table(directory / f"edges-{a}__{b}.parquet")
+        table = pq.read_table(directory / f"edges-{pair_name(a, b)}.parquet")
         edges[(a, b)] = (
             table["row_a"].to_numpy(),
             table["row_b"].to_numpy(),

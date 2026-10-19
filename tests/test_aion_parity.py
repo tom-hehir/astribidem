@@ -119,9 +119,10 @@ def test_reproduces_aion_output(surveys, edge_sources, label, source):
         table = crossmatch(surveys, mode=mode(kind, arguments), **SETTINGS)
     else:
         table = resolve(edge_sources[source], mode(kind, arguments))
+    # AION-2 wrote a pair as a__b; astribidem writes a+b.
     expected = in_entity_order(
         {
-            key.removeprefix(f"{label}/"): value
+            key.removeprefix(f"{label}/").replace("__", "+"): value
             for key, value in EXPECTED.items()
             if key.startswith(f"{label}/")
         }

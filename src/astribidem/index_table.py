@@ -2,7 +2,9 @@
 
 An index holds an int64 ``<survey>/row_index`` column per survey: row ``i``
 of a survey is its ``i``-th input row, and null means the survey is absent
-from that entity. Survey names therefore become column prefixes. Settings,
+from that entity. A pair of surveys is written ``<a>+<b>``, as in the
+``<a>+<b>/separation_arcsec`` columns of a subset join. Survey names
+therefore become column prefixes. Settings,
 dedupe outcomes and a summary are recorded as JSON in the schema metadata.
 """
 
@@ -24,12 +26,26 @@ def row_column(survey: str) -> str:
     return f"{survey}/row_index"
 
 
+def pair_name(survey_a: str, survey_b: str) -> str:
+    """How a pair of surveys is written in column and file names."""
+    return f"{survey_a}+{survey_b}"
+
+
+def separation_column(survey_a: str, survey_b: str) -> str:
+    """The column holding a pair's separations in a subset join."""
+    return f"{pair_name(survey_a, survey_b)}/separation_arcsec"
+
+
 def check_survey_names(names: Iterable[str]) -> None:
-    """Raise unless every name can prefix an index column: non-empty, no ``/``."""
+    """Raise unless every name can prefix a column: non-empty, no ``/`` or ``+``.
+
+    Without ``+`` in names, two different pairs never share a pair name.
+    """
     for name in names:
-        if not isinstance(name, str) or not name or "/" in name:
+        if not isinstance(name, str) or not name or "/" in name or "+" in name:
             raise ValueError(
-                f"survey names must be non-empty and must not contain '/': {name!r}"
+                f"survey names must be non-empty and must not contain '/' or '+': "
+                f"{name!r}"
             )
 
 

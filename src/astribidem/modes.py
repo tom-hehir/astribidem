@@ -32,7 +32,12 @@ import pyarrow as pa
 
 from astribidem.candidate_edges import CandidateEdges
 from astribidem.graph import build_global_graph, positions_in
-from astribidem.index_table import SUMMARY_KEY, encode_metadata, row_column
+from astribidem.index_table import (
+    SUMMARY_KEY,
+    encode_metadata,
+    row_column,
+    separation_column,
+)
 
 SUBSET_JOIN_POLICIES = (
     "mutual_nearest",
@@ -243,7 +248,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
             # the separation column (anchored policies can repeat b-rows, so
             # key on the a side, which is unique for every policy).
             pos = np.searchsorted(ka, rows[a])
-            columns[f"{a}__{b}/separation_arcsec"] = pa.array(
+            columns[separation_column(a, b)] = pa.array(
                 sep[np.clip(pos, 0, max(len(sep) - 1, 0))].astype(np.float32)
                 if len(sep)
                 else np.zeros(0, dtype=np.float32),

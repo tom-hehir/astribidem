@@ -63,7 +63,7 @@ edges-directory/
     │   ├── a.parquet            row, status, kept_row
     │   └── b.parquet
     └── edges/
-        └── a__b.parquet         row_a, row_b, separation_arcsec
+        └── a+b.parquet          row_a, row_b, separation_arcsec
 ```
 
 Each deduplication file lists only the rows that dedupe removed from matching.

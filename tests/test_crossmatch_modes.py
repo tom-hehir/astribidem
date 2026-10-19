@@ -90,7 +90,7 @@ def test_degenerate_two_survey_join_emits_rows_and_separations():
     table = result
     assert table.column("a/row_index").to_pylist() == [0, 1]
     assert table.column("b/row_index").to_pylist() == [0, 1]
-    seps = table.column("a__b/separation_arcsec").to_pylist()
+    seps = table.column("a+b/separation_arcsec").to_pylist()
     assert seps == pytest.approx([0.1, 0.2], abs=1e-6)
     metadata = table.schema.metadata
     assert metadata[b"astribidem.match_index.mode"] == b"degenerate"

@@ -6,7 +6,7 @@ A saved edge directory holds ``metadata.json`` and one directory per segment::
                                             pair radii, and the segment names
     <segment>/rows/<survey>.parquet         row: the rows the segment covers
     <segment>/deduplication/<survey>.parquet  row, status, kept_row
-    <segment>/edges/<a>__<b>.parquet        row_a, row_b, separation_arcsec
+    <segment>/edges/<a>+<b>.parquet         row_a, row_b, separation_arcsec
 
 A segment that covers every row, such as ``segment-0`` of an in-memory build,
 has no ``rows`` directory. ``status`` is ``"dropped"`` or ``"disputed"``;
@@ -36,6 +36,7 @@ from astribidem.edges import (
     pair_edge_chunks,
     prepare_edge_build,
 )
+from astribidem.index_table import pair_name
 from astribidem.kernel import resolve_workers
 
 SINGLE_SEGMENT = "segment-0"
@@ -51,7 +52,7 @@ _EDGE_SCHEMA = pa.schema(
 
 
 def _edge_file(segment: Path, survey_a: str, survey_b: str) -> Path:
-    return segment / "edges" / f"{survey_a}__{survey_b}.parquet"
+    return segment / "edges" / f"{pair_name(survey_a, survey_b)}.parquet"
 
 
 def _dedupe_file(segment: Path, survey: str) -> Path:
@@ -60,15 +61,6 @@ def _dedupe_file(segment: Path, survey: str) -> Path:
 
 def _rows_file(segment: Path, survey: str) -> Path:
     return segment / "rows" / f"{survey}.parquet"
-
-
-def _check_pair_file_names(pairs: Iterable[tuple[str, str]]) -> None:
-    names = [f"{a}__{b}" for a, b in pairs]
-    if len(set(names)) != len(names):
-        raise ValueError(
-            "two survey pairs share an edge file name; rename surveys so that "
-            "no name contains '__'"
-        )
 
 
 def _check_segment_name(name: str) -> None:
@@ -148,7 +140,6 @@ def _make_segment_directories(segment: Path, *, with_rows: bool) -> None:
 def write_segment(directory: str | Path, name: str, edges: CandidateEdges) -> None:
     """Write one segment's files; ``write_metadata`` lists the segments."""
     _check_segment_name(name)
-    _check_pair_file_names((p.survey_a, p.survey_b) for p in edges.pairs.values())
     segment = Path(directory) / name
     with_rows = any(survey.rows is not None for survey in edges.surveys)
     _make_segment_directories(segment, with_rows=with_rows)
@@ -311,7 +302,6 @@ def build_edges_to_directory(
     )
     del coordinates
     directory = Path(directory)
-    _check_pair_file_names(plan.pair_radius_arcsec)
     segment = directory / SINGLE_SEGMENT
     _make_segment_directories(segment, with_rows=False)
     outcomes, active = dedupe_kernels(plan, kernels)

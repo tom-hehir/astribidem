@@ -106,7 +106,7 @@ def test_subset_join_builds_only_selected_relations():
     assert result.column_names == [
         "a/row_index",
         "b/row_index",
-        "a__b/separation_arcsec",
+        "a+b/separation_arcsec",
     ]
     assert result["a/row_index"].to_pylist() == [0]
 
