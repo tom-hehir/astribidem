@@ -187,7 +187,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
     """
 
     surveys: list[str]
-    policy: str = "mutual_nearest"
+    policy: SubsetJoinPolicy = "mutual_nearest"
 
     def __post_init__(self) -> None:
         if self.policy not in SUBSET_JOIN_POLICIES:
