@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `SpatialLink.policy` is typed as a `Literal` of the subset-join policy names,
+  so jsonargparse rejects a misspelt policy when it parses a config.
+
 ## 0.0.0a1 — 2026-10-19
 
 Breaking changes, with no compatibility shims; rebuild saved edges and

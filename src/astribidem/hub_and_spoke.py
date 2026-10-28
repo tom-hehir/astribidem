@@ -23,7 +23,7 @@ from astribidem.index_table import (
     row_column,
 )
 from astribidem.kernel import CatalogKernel, check_match_radius, resolve_workers
-from astribidem.modes import DegenerateCrossmatchConfig
+from astribidem.modes import DegenerateCrossmatchConfig, SubsetJoinPolicy
 from astribidem.uids import match_uids
 
 
@@ -37,7 +37,7 @@ class SpatialLink:
     """Match the full anchor and counterpart with an existing spatial policy."""
 
     radius_arcsec: float
-    policy: str = "mutual_nearest"
+    policy: SubsetJoinPolicy = "mutual_nearest"
 
     def __post_init__(self) -> None:
         check_match_radius(self.radius_arcsec, "SpatialLink.radius_arcsec")
