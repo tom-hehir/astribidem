@@ -96,7 +96,7 @@ def _sorted_batches(paths, schema, work: Path, memory_limit, threads):
             connection.execute(f"SET memory_limit = {_literal(memory_limit)}")
         if threads is not None:
             connection.execute(f"SET threads = {int(threads)}")
-        result = connection.execute(
+        result = connection.sql(
             f"SELECT * FROM read_parquet([{files}]) ORDER BY CASE {key} END"
         ).to_arrow_reader(_BATCH_ROWS)
         for batch in result:
