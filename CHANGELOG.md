@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `resolve_to_file` reads DuckDB's sorted rows through `connection.sql`, so
+  DuckDB 2.0 no longer warns that it copies them.
 - `SpatialLink.policy` and `DegenerateCrossmatchConfig.policy` are typed as a
   `Literal` of the subset-join policy names, so jsonargparse rejects a misspelt
   policy when it parses a config.
