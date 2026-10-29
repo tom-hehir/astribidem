@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import FrozenInstanceError
+from typing import get_args, get_type_hints
 
 import numpy as np
 import pyarrow as pa
@@ -9,6 +10,7 @@ import pytest
 
 from astribidem import SpatialLink, UIDLink, rows_to_ids
 from astribidem import match_hub_and_spoke as match_hub_and_spoke_rows
+from astribidem.modes import SUBSET_JOIN_POLICIES
 
 
 def match_hub_and_spoke(catalogs, *, anchor, links, **kwargs):
@@ -263,6 +265,13 @@ def test_spatial_link_with_an_unknown_policy_is_rejected():
             links={"b": SpatialLink(1, "unknown")},
             dedupe_radius_arcsec=0.0,
         )
+
+
+def test_spatial_link_policy_is_typed_as_the_subset_join_policies():
+    # A config parser such as jsonargparse reads this Literal, so it rejects a
+    # misspelt policy before any matching starts.
+    policy = get_type_hints(SpatialLink)["policy"]
+    assert get_args(policy) == SUBSET_JOIN_POLICIES
 
 
 def test_link_configurations_are_frozen():

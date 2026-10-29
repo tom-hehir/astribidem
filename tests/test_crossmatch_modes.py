@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import combinations
+from typing import get_args, get_type_hints
 
 import numpy as np
 import pyarrow as pa
@@ -11,6 +12,7 @@ import pytest
 from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
 from astribidem.index_table import index_summary
 from astribidem.modes import (
+    SUBSET_JOIN_POLICIES,
     DegenerateCrossmatchConfig,
     EntitySelectionConfig,
     EntitywiseCrossmatchConfig,
@@ -108,6 +110,13 @@ def test_degenerate_three_way_requires_all_pairwise_agreement():
     result = DegenerateCrossmatchConfig(surveys=["a", "b", "c"]).build(inputs)
     assert index_summary(result)["n_groups"] == 1
     assert result.column("a/row_index").to_pylist() == [0]
+
+
+def test_degenerate_policy_is_typed_as_the_subset_join_policies():
+    policy = get_type_hints(DegenerateCrossmatchConfig)["policy"]
+    assert get_args(policy) == SUBSET_JOIN_POLICIES
+    with pytest.raises(ValueError, match="unknown policy"):
+        DegenerateCrossmatchConfig(surveys=["a", "b"], policy="nope")
 
 
 def test_degenerate_anchored_policy_restricted_to_two_surveys():

@@ -47,6 +47,9 @@ policy=...)` to `crossmatch`. Survey `a` is the anchor.
 | `mutual_nearest` | The two rows select each other as nearest candidates. |
 | `mutual_unique` | Both rows have exactly one in-radius candidate. |
 
+The `policy` field is typed as a `Literal` of these names, so a config parser
+such as jsonargparse rejects any other value when it reads the config.
+
 For example, A has rows at offsets 0 and 0.8 arcsec, and B has one row at 0.2
 arcsec. Dedupe is disabled. Both anchored policies produce two associations;
 mutual-nearest keeps only A's first row with B; mutual-unique keeps neither

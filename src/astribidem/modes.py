@@ -20,7 +20,7 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from itertools import combinations
-from typing import Any
+from typing import Any, Literal, get_args
 
 import numpy as np
 import pyarrow as pa
@@ -34,12 +34,13 @@ from astribidem.index_table import (
     separation_column,
 )
 
-SUBSET_JOIN_POLICIES = (
+SubsetJoinPolicy = Literal[
     "mutual_nearest",
     "mutual_unique",
     "anchored_nearest",
     "anchored_unique",
-)
+]
+SUBSET_JOIN_POLICIES = get_args(SubsetJoinPolicy)
 ENTITY_RESOLVERS = ("refuse", "sequential", "split")
 ENTITY_DISPOSITIONS = ("singleton", "drop")
 ENTITY_DEFAULT_SIZE_CAP = 30
@@ -186,7 +187,7 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
     """
 
     surveys: list[str]
-    policy: str = "mutual_nearest"
+    policy: SubsetJoinPolicy = "mutual_nearest"
 
     def __post_init__(self) -> None:
         if self.policy not in SUBSET_JOIN_POLICIES:

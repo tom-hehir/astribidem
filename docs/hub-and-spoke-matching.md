@@ -56,7 +56,9 @@ participant, including the anchor; `0.0` opts out. Use
 `dedupe_radius_arcsec_overrides` for exceptions among those participants.
 UID-only sources need no coordinates and cannot have a spatial dedupe override. `SpatialLink` supports the existing `mutual_nearest` (default),
 `mutual_unique`, `anchored_nearest` and `anchored_unique` policies. Anchored
-policies may select the same counterpart for multiple anchors.
+policies may select the same counterpart for multiple anchors. The field is
+typed as a `Literal` of these names, so a config parser such as jsonargparse
+rejects any other value when it reads the config.
 
 ## Scientific contract
 
