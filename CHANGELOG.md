@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `resolve_to_file` reads DuckDB's sorted rows through `connection.sql`, so
+  DuckDB 2.0 no longer warns that it copies them.
+
 ## 0.0.0a1 — 2026-10-19
 
 Breaking changes, with no compatibility shims; rebuild saved edges and
