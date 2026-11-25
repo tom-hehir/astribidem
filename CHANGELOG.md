@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.0a2 — 2026-11-25
 
 - Auditing moves to the `astribidem.audit` package, which the matching code
   does not import. `audit_edges` returns an `EdgeAudit` dataclass instead of
