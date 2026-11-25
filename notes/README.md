@@ -15,6 +15,8 @@ use the [documentation](../docs/README.md) for supported behavior.
 
 - [UID implementation decisions](uid-matching-implementation.md): algorithm and
   dependency choices, including comparisons with other join implementations.
+- [Spatial join implementation decisions](spatial-join-implementation.md): why
+  candidate searches join tree against tree, and why chunks follow row order.
 
 ## History
 
