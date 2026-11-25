@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Auditing moves to the `astribidem.audit` package, which the matching code
+  does not import. `audit_edges` returns an `EdgeAudit` dataclass instead of
+  a dictionary: pair fields are named `*_a`/`*_b` after the pair's surveys,
+  component sizes are a `size_counts` tuple, and fractions and separations are
+  no longer rounded. `dataclasses.asdict` gives plain JSON types.
+  `astribidem.audit_edges` is still exported.
+- `restrict_radius` narrows built edges to a smaller match radius, and
+  `build_edges_with_duplicates` with `deduplicate` applies a smaller dedupe
+  radius, each equal to a fresh build at those settings.
+- An `astribidem` command: `audit` and `audit-sweep` print audits of saved
+  edges, at their built radius or narrowed ones, and `summary` prints the
+  settings and summary recorded in an index file.
 - `resolve_to_file` reads DuckDB's sorted rows through `connection.sql`, so
   DuckDB 2.0 no longer warns that it copies them.
 - `SpatialLink.policy` and `DegenerateCrossmatchConfig.policy` are typed as a

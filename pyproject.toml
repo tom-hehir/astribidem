@@ -28,6 +28,9 @@ dependencies = [
   "pyarrow>=15",  # Arrow index tables, compute kernels and Parquet files
 ]
 
+[project.scripts]
+astribidem = "astribidem.audit.cli:main"
+
 [project.optional-dependencies]
 # DuckDB sorts the index in resolve_to_file; the band build itself needs nothing extra.
 out-of-core = ["duckdb>=1.5"]

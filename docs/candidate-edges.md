@@ -190,25 +190,6 @@ band has run.
 
 ## Audit the edges
 
-```python
-from astribidem import audit_edges
-
-audit = audit_edges(edges)  # a dictionary of plain JSON types
-```
-
-The audit works on edges held in memory or reloaded with `read_edges`. It
-reports:
-
-- for each survey, its row count, active rows, dropped and disputed rows, and
-  the number and largest size of its duplicate groups;
-- for each pair, its radius, edge count, separation percentiles, the fraction of
-  active rows with at least one candidate, and the rows with several
-  candidates;
-- a census of connected components over every survey: a size histogram, the
-  largest component, clean and ambiguous counts, and counts by survey
-  combination.
-
-A growing largest component warns that the radius is close to percolation. A
-clean component spanning surveys A and B is one row of a clean A x B product,
-so the combination counts size subset joins before building them. The census
-omits pairs that were not built; `all_pairs_built` is false in that case.
+`astribidem.audit` summarises candidate edges, audits one build at smaller
+radii or dedupe radii without searching again, and provides the `astribidem`
+command line. See [auditing a crossmatch](auditing.md).
