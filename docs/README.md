@@ -12,6 +12,8 @@ matching task.
   associations through a shared anchor.
 - [Candidate edges](candidate-edges.md): reuse searches, save and reload edges,
   and process catalogues larger than memory.
+- [Auditing a crossmatch](auditing.md): summarise candidate edges, compare
+  radii and dedupe radii from one build, and the `astribidem` command line.
 
 ## Reference and development
 

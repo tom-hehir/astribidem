@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "astribidem"
-version = "0.0.0a1"
+version = "0.0.0a2"
 description = "Astronomical catalogue matching with explicit association policies and Arrow indexes."
 readme = "README.md"
 license = "MIT"
@@ -27,6 +27,9 @@ dependencies = [
   "scipy>=1.11.1",  # cKDTree pair search and connected components
   "pyarrow>=15",  # Arrow index tables, compute kernels and Parquet files
 ]
+
+[project.scripts]
+astribidem = "astribidem.audit.cli:main"
 
 [project.optional-dependencies]
 # DuckDB sorts the index in resolve_to_file; the band build itself needs nothing extra.

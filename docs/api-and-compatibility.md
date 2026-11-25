@@ -8,7 +8,8 @@ between alpha releases.
 
 ## Public entry points
 
-Names explicitly exported from `astribidem` are the supported alpha interface.
+Names explicitly exported from `astribidem` and `astribidem.audit` are the
+supported alpha interface.
 
 | Task | Entry points |
 | --- | --- |
@@ -18,6 +19,7 @@ Names explicitly exported from `astribidem` are the supported alpha interface.
 | Match shared identifiers | `match_uids`, `match_hub_and_spoke`, `UIDLink`, `SpatialLink` |
 | Use results | `rows_to_ids`, `ids_to_rows`, `index_summary` |
 | Reuse candidate searches | `build_edges`, `resolve`, `audit_edges`, `CandidateEdges`, `PairEdges`, `DedupeOutcome` |
+| Audit candidate edges and sweep settings | `astribidem.audit`: `audit_edges` and its result dataclasses, `restrict_radius`, `build_edges_with_duplicates`, `deduplicate`; the `astribidem` command |
 | Save candidate searches | `write_edges`, `read_edges`, `read_edges_metadata`, `build_edges_to_directory` |
 | Build and resolve catalogues larger than memory | `write_band_layout`, `as_chunks`, `build_edges_by_band`, `resolve_to_file` |
 | Coordinate separate workers | `prepare_band_build`, `build_band`, `sweep_boundaries`, `read_segment`, `segment_names` |
