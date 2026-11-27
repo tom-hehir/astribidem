@@ -33,13 +33,32 @@ pairs = resolve(edges, DegenerateCrossmatchConfig(surveys=["a", "b"]))
 per survey and one `PairEdges` per survey pair, all in row positions. `resolve`
 takes every matching setting from the edges, so the settings are not repeated.
 
-A degenerate mode reads only the pairs between its own surveys. It can
-therefore use edges built for more surveys, and gives the same index as a build
-over its surveys alone. An entitywise mode uses every survey in the edges,
-because another survey's rows can make a component ambiguous.
+### Which surveys a mode covers
+
+Both modes take an optional `surveys` list: the surveys the index covers, in
+column order. `resolve` reads only those surveys' dedupe outcomes and the pairs
+among them. Edges built for more surveys therefore give the same index as edges
+built for those surveys alone, so one edge build can serve several indexes over
+different surveys. Without `surveys`, a mode covers every survey in the edges,
+in the order they were built; that is the usual case when the edges were built
+for exactly the surveys you need.
+
+The list matters most for an entitywise mode. Every survey it resolves takes
+part in forming entities: another survey's rows can join a component or make
+it ambiguous, so adding a survey can change which entities form. Listing the
+surveys keeps the others out of resolution entirely. To resolve several surveys
+but keep only some memberships, list them all in `surveys` and filter with
+`EntitySelectionConfig`, which applies after resolution.
+
+```python
+edges = build_edges(surveys, radius_arcsec=1.0, dedupe_radius_arcsec=0.0)
+ab_entities = resolve(edges, EntitywiseCrossmatchConfig(surveys=["a", "b"]))
+ab_pairs = resolve(edges, DegenerateCrossmatchConfig(surveys=["a", "b"]))
+```
 
 `build_edges(..., pairs=[("a", "b")])` joins only the named pairs. Such edges
-serve only degenerate modes over those pairs; `resolve` rejects any other mode.
+serve only modes whose surveys' pairs were all built; `resolve` rejects any
+other mode.
 
 ## Save and reload
 
@@ -78,6 +97,12 @@ listing them; a segment without a `rows` directory covers every row.
 lists them, `read_edges_metadata(directory)` returns the saved settings, and
 `read_edges` loads every segment and combines them. Resolving segments separately gives the same entities as
 resolving them combined.
+
+`read_edges` and `read_segment` take an optional `surveys` list and then read
+only those surveys' files and the saved pairs among them, in that order. Pass a
+mode's surveys to avoid loading edges saved for many surveys when the mode
+covers a few: `resolve(read_edges(directory, mode.surveys), mode)` equals
+`resolve(read_edges(directory), mode)`. `resolve_to_file` does this itself.
 
 ## Stream edges to disk
 

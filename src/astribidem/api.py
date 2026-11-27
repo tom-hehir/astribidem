@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from itertools import combinations
 
 import pyarrow as pa
@@ -22,19 +22,17 @@ from astribidem.modes import CrossmatchModeConfig, mode_to_mapping
 from astribidem.uids import as_arrow
 
 
-def _required_pairs(
-    mode: CrossmatchModeConfig, survey_names: Iterable[str]
-) -> set[frozenset[str]]:
-    surveys = survey_names if mode.requires_all_surveys() else mode.required_surveys()
-    return {frozenset(pair) for pair in combinations(surveys, 2)}
+def _mode_surveys(mode: CrossmatchModeConfig, edges: CandidateEdges) -> tuple[str, ...]:
+    """The surveys the mode covers: its own list, or every survey in the edges."""
+    return edges.survey_names if mode.surveys is None else tuple(mode.surveys)
 
 
-def _check_mode_fits_edges(mode: CrossmatchModeConfig, edges: CandidateEdges) -> None:
+def _check_mode_fits_edges(surveys: tuple[str, ...], edges: CandidateEdges) -> None:
     """Fail loudly when the edges cannot answer the mode's question."""
-    unknown = set(mode.required_surveys()) - set(edges.survey_names)
+    unknown = set(surveys) - set(edges.survey_names)
     if unknown:
         raise ValueError(f"mode names unknown surveys: {sorted(unknown)}")
-    missing = _required_pairs(mode, edges.survey_names) - set(edges.pairs)
+    missing = {frozenset(pair) for pair in combinations(surveys, 2)} - set(edges.pairs)
     if missing:
         raise ValueError(
             "the edges were built without survey pairs this mode needs: "
@@ -46,9 +44,10 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
     """Resolve candidate edges into one row-position index.
 
     ``mode`` selects a subset join or exactly-once entity
-    resolution. A degenerate mode reads only its own surveys' pairs, so it
-    can use edges built for more surveys; an entitywise mode uses every
-    survey in the edges. Entity selection is applied only after all surveys
+    resolution. Only the mode's ``surveys`` and the pairs among them are read,
+    so edges built for more surveys give the same index as edges built for
+    those surveys alone; a mode without ``surveys`` covers every survey in the
+    edges. Entity selection is applied only after all of the mode's surveys
     are resolved.
 
     The result contains int64 ``<survey>/row_index`` columns (row ``i`` is the
@@ -58,9 +57,10 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
     saved with ``pyarrow.parquet.write_table`` is complete. Use ``rows_to_ids`` to
     replace rows with caller IDs.
     """
-    _check_mode_fits_edges(mode, edges)
+    surveys = _mode_surveys(mode, edges)
+    _check_mode_fits_edges(surveys, edges)
+    edges = edges.select_surveys(surveys)
     table = mode.build(edges)
-    used_pairs = _required_pairs(mode, edges.survey_names)
     provenance = {
         "surveys": [
             {"name": survey.name, "dedupe_radius_arcsec": survey.dedupe_radius_arcsec}
@@ -71,8 +71,7 @@ def resolve(edges: CandidateEdges, mode: CrossmatchModeConfig) -> pa.Table:
                 "surveys": [pair.survey_a, pair.survey_b],
                 "radius_arcsec": pair.radius_arcsec,
             }
-            for key, pair in edges.pairs.items()
-            if key in used_pairs
+            for pair in edges.pairs.values()
         ],
         "mode": mode_to_mapping(mode),
     }
@@ -104,12 +103,12 @@ def crossmatch(
 ) -> pa.Table:
     """Build candidate edges and resolve them in memory: one row-position index.
 
-    Equivalent to ``resolve(build_edges(...), mode)``, except that a
-    degenerate mode joins only the survey pairs it reads. See ``build_edges``
+    Equivalent to ``resolve(build_edges(...), mode)``, except that a mode with
+    ``surveys`` joins only the pairs among them. See ``build_edges``
     for the matching settings and ``resolve`` for the result. No payloads are
     read and nothing is saved.
     """
-    names = tuple(coordinates)
+    pairs = None if mode.surveys is None else combinations(mode.surveys, 2)
     workers = resolve_workers(workers)
     settings, kernels = prepare_edge_build(
         coordinates,
@@ -117,7 +116,7 @@ def crossmatch(
         dedupe_radius_arcsec=dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
         radius_arcsec_overrides=radius_arcsec_overrides,
-        pairs=None if mode.requires_all_surveys() else _required_pairs(mode, names),
+        pairs=pairs,
     )
     del coordinates
     edges = build_prepared_edges(settings, kernels, workers=workers)

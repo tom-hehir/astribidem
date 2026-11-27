@@ -36,7 +36,8 @@ _BATCH_ROWS = 65_536
 
 def _resolve_segment(arguments) -> None:
     edges_directory, name, mode, path = arguments
-    table = resolve(read_segment(edges_directory, name), mode)
+    # Read only the mode's surveys; resolve would discard the rest.
+    table = resolve(read_segment(edges_directory, name, mode.surveys), mode)
     pq.write_table(table, path)
 
 
@@ -133,7 +134,8 @@ def resolve_to_file(
     names = segment_names(edges_directory)
     if not names:
         # Edges built from catalogues with no rows: write the empty index.
-        pq.write_table(resolve(read_edges(edges_directory), mode), index_path)
+        edges = read_edges(edges_directory, mode.surveys)
+        pq.write_table(resolve(edges, mode), index_path)
         return
     work = index_path.with_name(f".{index_path.name}.segments")
     shutil.rmtree(work, ignore_errors=True)

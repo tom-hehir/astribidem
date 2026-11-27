@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- `EntitywiseCrossmatchConfig` takes an optional `surveys` list, and
+  `DegenerateCrossmatchConfig.surveys` becomes optional. `resolve` reads only
+  a mode's surveys and the pairs among them, so edges built for more surveys
+  give the same index as a build over those surveys alone; without `surveys`,
+  a mode covers every survey in the edges. An entitywise mode can therefore
+  share edges built for other indexes, and edges built with `pairs=` serve any
+  mode over those pairs.
+- `CrossmatchModeConfig.required_surveys` and `requires_all_surveys` are
+  removed; read `surveys` instead.
+- The two-survey check of the `anchored_*` policies runs in `resolve` when a
+  degenerate mode has no `surveys`.
+- `read_edges` and `read_segment` take an optional `surveys` list and read
+  only those surveys and the saved pairs among them. `resolve_to_file` reads
+  only its mode's surveys.
+- `CandidateEdges.select_surveys` keeps some surveys and the pairs among them.
+
 ## 0.0.0a2 — 2026-11-25
 
 - Auditing moves to the `astribidem.audit` package, which the matching code

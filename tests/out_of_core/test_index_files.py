@@ -44,6 +44,7 @@ MODES = [
     EntitywiseCrossmatchConfig(
         selection=EntitySelectionConfig(min_surveys=2, must_include_surveys=["b"])
     ),
+    EntitywiseCrossmatchConfig(surveys=["c", "a"], resolver="split"),
     DegenerateCrossmatchConfig(surveys=["b", "a", "c"]),
     DegenerateCrossmatchConfig(surveys=["c", "a"], policy="anchored_unique"),
 ]
