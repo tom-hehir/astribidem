@@ -31,7 +31,7 @@ import numpy as np
 from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
 from astribidem.edges import EdgeSettings, dedupe_from_pairs
 from astribidem.graph import connected_components, positions_in
-from astribidem.kernel import CatalogKernel, resolve_workers
+from astribidem.sky_position_tree import SkyPositionTree, resolve_workers
 
 MARGIN_BELOW = -1
 OWNED = 0
@@ -107,8 +107,8 @@ def build_region(
         zip(names, np.cumsum([0, *[sizes[n] for n in names]])[:-1], strict=True)
     )
     n_nodes = sum(sizes.values())
-    kernels = {
-        name: CatalogKernel(loaded[name].ra, loaded[name].dec, name=name)
+    trees = {
+        name: SkyPositionTree(loaded[name].ra, loaded[name].dec, name=name)
         for name in names
     }
     owned = {name: np.asarray(loaded[name].side) == OWNED for name in names}
@@ -120,7 +120,7 @@ def build_region(
         n = sizes[name]
         radius = settings.dedupe_radius_arcsec[name]
         if radius > 0 and n:
-            first, second, _ = kernels[name].self_pairs(radius)
+            first, second, _ = trees[name].self_pairs(radius)
         else:
             first = second = _EMPTY_ROWS
         labels = connected_components(n, first, second)
@@ -143,11 +143,11 @@ def build_region(
     # Cross-survey pairs, leaving out rows whose dedupe verdict removed them.
     cross = {}
     for (a, b), radius in settings.pair_radius_arcsec.items():
-        i, j, separation = kernels[a].all_pairs(kernels[b], radius, workers=workers)
+        i, j, separation = trees[a].all_pairs(trees[b], radius, workers=workers)
         keep = ~inactive[a][i] & ~inactive[b][j]
         cross[(a, b)] = (i[keep], j[keep], separation[keep])
 
-    del kernels
+    del trees
 
     # Connected pieces over cross-survey pairs and undecided dedupe pairs. A
     # piece is finished exactly when the region owns every row in it: a

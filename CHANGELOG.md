@@ -17,6 +17,15 @@
   only those surveys and the saved pairs among them. `resolve_to_file` reads
   only its mode's surveys.
 - `CandidateEdges.select_surveys` keeps some surveys and the pairs among them.
+- `CatalogKernel` is renamed `SkyPositionTree`, and its module
+  `astribidem.kernel` becomes `astribidem.sky_position_tree`.
+- `SkyPositionTree.save` and `SkyPositionTree.load` write a tree to a file and
+  restore it, much faster than building it again.
+- `build_edges_from_trees` and `build_edges_from_trees_to_directory` take a
+  mapping of survey names to trees instead of coordinates, and otherwise match
+  `build_edges` and `build_edges_to_directory`. They read the trees in a fixed
+  order, holding at most two at a time, so a mapping that loads each tree on
+  demand keeps memory low.
 
 ## 0.0.0a2 — 2026-11-25
 

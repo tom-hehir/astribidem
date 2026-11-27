@@ -10,6 +10,7 @@ from astribidem.candidate_edges import (
     PairEdges,
 )
 from astribidem.edge_files import (
+    build_edges_from_trees_to_directory,
     build_edges_to_directory,
     read_edges,
     read_edges_metadata,
@@ -17,10 +18,9 @@ from astribidem.edge_files import (
     segment_names,
     write_edges,
 )
-from astribidem.edges import build_edges
+from astribidem.edges import build_edges, build_edges_from_trees
 from astribidem.hub_and_spoke import SpatialLink, UIDLink, match_hub_and_spoke
 from astribidem.index_table import index_summary
-from astribidem.kernel import CatalogKernel
 from astribidem.modes import (
     CrossmatchModeConfig,
     DegenerateCrossmatchConfig,
@@ -37,6 +37,7 @@ from astribidem.out_of_core.banded import (
     write_band_layout,
 )
 from astribidem.out_of_core.index_files import resolve_to_file
+from astribidem.sky_position_tree import SkyPositionTree
 from astribidem.uids import match_uids
 
 __version__ = version("astribidem")
@@ -44,7 +45,7 @@ __version__ = version("astribidem")
 __all__ = [
     "__version__",
     "CandidateEdges",
-    "CatalogKernel",
+    "SkyPositionTree",
     "CrossmatchModeConfig",
     "DedupeOutcome",
     "DegenerateCrossmatchConfig",
@@ -57,6 +58,8 @@ __all__ = [
     "audit_edges",
     "build_band",
     "build_edges",
+    "build_edges_from_trees",
+    "build_edges_from_trees_to_directory",
     "build_edges_by_band",
     "build_edges_to_directory",
     "crossmatch",

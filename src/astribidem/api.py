@@ -10,14 +10,13 @@ import pyarrow.compute as pc
 from numpy.typing import ArrayLike
 
 from astribidem.candidate_edges import CandidateEdges
-from astribidem.edges import build_prepared_edges, prepare_edge_build
+from astribidem.edges import build_edges_from_trees, sky_position_trees
 from astribidem.index_table import (
     DEDUPE_KEY,
     RESOLVED_CONFIG_KEY,
     encode_metadata,
     row_column,
 )
-from astribidem.kernel import resolve_workers
 from astribidem.modes import CrossmatchModeConfig, mode_to_mapping
 from astribidem.uids import as_arrow
 
@@ -109,18 +108,18 @@ def crossmatch(
     read and nothing is saved.
     """
     pairs = None if mode.surveys is None else combinations(mode.surveys, 2)
-    workers = resolve_workers(workers)
-    settings, kernels = prepare_edge_build(
-        coordinates,
+    trees = sky_position_trees(coordinates)
+    del coordinates
+    edges = build_edges_from_trees(
+        trees,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
         radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
+        workers=workers,
     )
-    del coordinates
-    edges = build_prepared_edges(settings, kernels, workers=workers)
-    del kernels
+    del trees
     return resolve(edges, mode)
 
 

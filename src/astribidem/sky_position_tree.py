@@ -1,10 +1,11 @@
-"""Exact spatial pair search: a scipy cKDTree over float64 unit vectors.
+"""Exact spatial pair search over sky positions: ``SkyPositionTree``.
 
-Coordinates become float64 Cartesian unit vectors and angular radii become
-chord lengths. Every query is exact, because a missed pair would silently
-become a duplicate entity. The kernel guarantees:
+A ``SkyPositionTree`` holds one survey's positions as float64 Cartesian unit
+vectors and a scipy cKDTree over them. Angular radii become chord lengths.
+Every query is exact, because a missed pair would silently become a duplicate
+entity. The trees guarantee:
 
-- one ``CatalogKernel`` per survey serves its dedupe self-match and every pair
+- one ``SkyPositionTree`` per survey serves its dedupe self-match and every pair
   it takes part in; trees are built with ``compact_nodes=True,
   balanced_tree=True``, which reference the coordinates rather than copy them;
 - the boundary is inclusive: pairs at exactly the radius are emitted
@@ -28,11 +29,13 @@ from __future__ import annotations
 
 import math
 import os
+import pickle
 import warnings
 from collections import deque
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from itertools import pairwise
+from pathlib import Path
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -149,8 +152,12 @@ def _chunk_bounds(n: int, workers: int, chunk_rows: int | None) -> np.ndarray:
     return np.linspace(0, n, n_chunks + 1).astype(np.int64)
 
 
-class CatalogKernel:
-    """One survey's match structure: unit vectors plus their KD-tree."""
+class SkyPositionTree:
+    """One survey's sky positions: unit vectors plus their KD-tree.
+
+    Build one from RA/Dec in degrees, or restore a saved one with ``load``,
+    which is much faster than building it again.
+    """
 
     def __init__(
         self, ra: np.ndarray, dec: np.ndarray, *, name: str | None = None
@@ -164,6 +171,39 @@ class CatalogKernel:
 
     def __len__(self) -> int:
         return len(self.xyz)
+
+    # Pickle only the cKDTree: it holds the unit vectors, and restoring ``xyz``
+    # from it keeps the two sharing one buffer, as after construction.
+    def __getstate__(self) -> dict:
+        return {"tree": self.tree}
+
+    def __setstate__(self, state: dict) -> None:
+        self.tree = state["tree"]
+        self.xyz = self.tree.data
+
+    def save(self, path: str | Path) -> None:
+        """Write the tree to ``path``, for ``load`` to restore without rebuilding.
+
+        The file is a pickle of 40 to 50 bytes per row. Unpickling can run
+        arbitrary code, so load only files you saved yourself.
+        """
+        with open(path, "wb") as file:
+            pickle.dump(self, file, protocol=pickle.HIGHEST_PROTOCOL)
+
+    @classmethod
+    def load(cls, path: str | Path) -> SkyPositionTree:
+        """A tree written by ``save``; queries give the same results as before.
+
+        Raises:
+            TypeError: ``path`` holds a pickle of something else.
+        """
+        with open(path, "rb") as file:
+            tree = pickle.load(file)
+        if not isinstance(tree, cls):
+            raise TypeError(
+                f"{path} holds a {type(tree).__name__}, not a {cls.__name__}"
+            )
+        return tree
 
     def self_pairs(
         self, radius_arcsec: float
@@ -183,7 +223,7 @@ class CatalogKernel:
 
     def all_pairs(
         self,
-        other: CatalogKernel,
+        other: SkyPositionTree,
         radius_arcsec: float,
         k: int | None = None,
         *,
@@ -199,7 +239,7 @@ class CatalogKernel:
         so any persisted or shared edge product must never be built from it.
 
         ``workers`` (``-1`` = all cores, ``1`` = serial one-shot) parallelizes
-        the ``k=None`` join by chunking this kernel's rows; output is
+        the ``k=None`` join by chunking this tree's rows; output is
         bit-identical to the serial call.
 
         Raises:
@@ -238,7 +278,7 @@ class CatalogKernel:
 
     def all_pairs_chunks(
         self,
-        other: CatalogKernel,
+        other: SkyPositionTree,
         radius_arcsec: float,
         *,
         workers: int = 1,
@@ -246,7 +286,7 @@ class CatalogKernel:
     ) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
         """The complete ``all_pairs`` join as an ordered stream of chunks.
 
-        Each chunk covers a contiguous slice of this kernel's rows, and the
+        Each chunk covers a contiguous slice of this tree's rows, and the
         chunks concatenate to exactly ``all_pairs(other, radius_arcsec)``. At
         most ``workers`` chunks are computed or buffered at once.
         """
@@ -255,7 +295,7 @@ class CatalogKernel:
 
     def _all_pairs_chunk_arrays(
         self,
-        other: CatalogKernel,
+        other: SkyPositionTree,
         chord: float,
         workers: int,
         chunk_rows: int | None,

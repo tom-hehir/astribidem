@@ -40,7 +40,6 @@ from astribidem.edge_files import write_metadata, write_segment
 from astribidem.edges import EdgeSettings, edge_settings
 from astribidem.graph import connected_components, positions_in
 from astribidem.index_table import check_survey_names, pair_name
-from astribidem.kernel import float64_coordinates
 from astribidem.out_of_core.regions import (
     MARGIN_ABOVE,
     MARGIN_BELOW,
@@ -51,6 +50,7 @@ from astribidem.out_of_core.regions import (
     combine_handovers,
     finish_handover,
 )
+from astribidem.sky_position_tree import float64_coordinates
 
 _ARCSEC_PER_DEGREE = 3600.0
 _LAYOUT_SCHEMA = pa.schema(

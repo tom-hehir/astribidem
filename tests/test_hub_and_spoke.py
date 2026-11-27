@@ -382,30 +382,30 @@ def test_low_precision_column_warns_once_through_every_conversion(recwarn):
 
 
 @pytest.mark.parametrize("empty_uid_link", [False, True])
-def test_hub_kernel_and_dedupe_are_reused_and_spokes_released(
+def test_hub_tree_and_dedupe_are_reused_and_spokes_released(
     monkeypatch, empty_uid_link
 ):
     import weakref
 
     from astribidem import hub_and_spoke as module
 
-    kernels, dedupes = {}, []
-    original_kernel, original_dedupe = module.CatalogKernel, module.dedupe_survey
+    trees, dedupes = {}, []
+    original_tree, original_dedupe = module.SkyPositionTree, module.dedupe_survey
 
     def prepare(ra, dec, *, name):
         if name != "a":
-            assert kernels["a"]() is not None
-            assert all(ref() is None for n, ref in kernels.items() if n != "a")
-        kernel = original_kernel(ra, dec, name=name)
-        assert name not in kernels
-        kernels[name] = weakref.ref(kernel)
-        return kernel
+            assert trees["a"]() is not None
+            assert all(ref() is None for n, ref in trees.items() if n != "a")
+        tree = original_tree(ra, dec, name=name)
+        assert name not in trees
+        trees[name] = weakref.ref(tree)
+        return tree
 
-    def dedupe(name, radius, kernel):
+    def dedupe(name, radius, tree):
         dedupes.append(name)
-        return original_dedupe(name, radius, kernel)
+        return original_dedupe(name, radius, tree)
 
-    monkeypatch.setattr(module, "CatalogKernel", prepare)
+    monkeypatch.setattr(module, "SkyPositionTree", prepare)
     monkeypatch.setattr(module, "dedupe_survey", dedupe)
     tables = {
         "uid": catalog([300], uid=[99 if empty_uid_link else 1]),
@@ -421,7 +421,7 @@ def test_hub_kernel_and_dedupe_are_reused_and_spokes_released(
         dedupe_radius_arcsec_overrides={"b": 0.0},
     )
     assert dedupes == ["a", "b", "c"]
-    assert all(ref() is None for ref in kernels.values())
+    assert all(ref() is None for ref in trees.values())
     assert result.num_rows == (0 if empty_uid_link else 1)
     if not empty_uid_link:
         assert result.to_pydict() == {
@@ -438,17 +438,17 @@ def test_hub_kernel_and_dedupe_are_reused_and_spokes_released(
         assert provenance["links"][name]["n_matches"] == 2
 
 
-def test_mixed_calls_prepare_fresh_kernels(monkeypatch):
+def test_mixed_calls_prepare_fresh_trees(monkeypatch):
     from astribidem import hub_and_spoke as module
 
-    original = module.CatalogKernel
+    original = module.SkyPositionTree
     prepared = []
 
     def prepare(ra, dec, *, name):
         prepared.append(name)
         return original(ra, dec, name=name)
 
-    monkeypatch.setattr(module, "CatalogKernel", prepare)
+    monkeypatch.setattr(module, "SkyPositionTree", prepare)
     for offset, expected in ((0.1, 1), (10, 0)):
         result = match_hub_and_spoke(
             {"a": catalog([1], offsets=[0]), "b": catalog([2], offsets=[offset])},

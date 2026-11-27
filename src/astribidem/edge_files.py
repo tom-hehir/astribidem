@@ -32,12 +32,14 @@ from astribidem.candidate_edges import (
     combine_segments,
 )
 from astribidem.edges import (
-    dedupe_kernels,
+    dedupe_trees,
+    matching_radii,
     pair_edge_chunks,
-    prepare_edge_build,
+    pairs_with_trees,
+    sky_position_trees,
 )
 from astribidem.index_table import pair_name
-from astribidem.kernel import resolve_workers
+from astribidem.sky_position_tree import SkyPositionTree, resolve_workers
 
 SINGLE_SEGMENT = "segment-0"
 _DROPPED = "dropped"
@@ -320,30 +322,68 @@ def build_edges_to_directory(
     directory)`` without holding every edge in memory. At most ``workers`` chunks of
     ``chunk_rows`` query rows are in memory at once; the default chunk size is
     one chunk per worker, which bounds nothing, so set ``chunk_rows`` when
-    edge memory is the limit. Coordinates, KD-trees and dedupe results stay in
-    memory throughout.
+    edge memory is the limit. Every survey's tree and dedupe results stay in
+    memory throughout; to build or load the trees yourself and hold fewer at
+    once, use ``build_edges_from_trees_to_directory``.
+    """
+    trees = sky_position_trees(coordinates)
+    del coordinates
+    build_edges_from_trees_to_directory(
+        trees,
+        directory,
+        radius_arcsec=radius_arcsec,
+        dedupe_radius_arcsec=dedupe_radius_arcsec,
+        dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
+        radius_arcsec_overrides=radius_arcsec_overrides,
+        pairs=pairs,
+        workers=workers,
+        chunk_rows=chunk_rows,
+    )
+
+
+def build_edges_from_trees_to_directory(
+    trees: Mapping[str, SkyPositionTree],
+    directory: str | Path,
+    *,
+    radius_arcsec: float,
+    dedupe_radius_arcsec: float,
+    dedupe_radius_arcsec_overrides: Mapping[str, float] | None = None,
+    radius_arcsec_overrides: Mapping[tuple[str, str] | frozenset[str], float]
+    | None = None,
+    pairs: Iterable[tuple[str, str]] | None = None,
+    workers: int = 1,
+    chunk_rows: int | None = None,
+) -> None:
+    """``build_edges_to_directory`` from trees already built or loaded.
+
+    ``trees`` maps survey names, in survey order, to their trees; the other
+    arguments are those of ``build_edges_to_directory``, and the files written
+    are the same. The trees are read in a fixed order, so a mapping that loads
+    each tree when it is read (with ``SkyPositionTree.load``) holds few at a
+    time: each tree once for dedupe, then the pairs grouped by first survey,
+    with at most two trees held. Only the dedupe results, about one byte per
+    row, stay in memory throughout.
     """
     workers = resolve_workers(workers)
-    plan, kernels = prepare_edge_build(
-        coordinates,
+    dedupe_radii, pair_radii = matching_radii(
+        trees,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
         radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
     )
-    del coordinates
     directory = Path(directory)
     segment = directory / SINGLE_SEGMENT
     _make_segment_directories(segment, with_rows=False)
-    outcomes, active = dedupe_kernels(plan, kernels)
+    outcomes, active = dedupe_trees(dedupe_radii, trees)
     for outcome in outcomes:
         _write_dedupe(segment, outcome)
-    for (a, b), radius in plan.pair_radius_arcsec.items():
+    for a, b, radius, tree_a, tree_b in pairs_with_trees(pair_radii, trees):
         with pq.ParquetWriter(_edge_file(segment, a, b), _EDGE_SCHEMA) as writer:
             for row_a, row_b, separation in pair_edge_chunks(
-                kernels[a],
-                kernels[b],
+                tree_a,
+                tree_b,
                 active[a],
                 active[b],
                 radius,
@@ -351,9 +391,10 @@ def build_edges_to_directory(
                 chunk_rows=chunk_rows,
             ):
                 writer.write_table(_edge_table(row_a, row_b, separation))
+        del tree_a, tree_b
     write_metadata(
         directory,
         outcomes,
-        [(a, b, radius) for (a, b), radius in plan.pair_radius_arcsec.items()],
+        [(a, b, radius) for (a, b), radius in pair_radii.items()],
         [SINGLE_SEGMENT],
     )

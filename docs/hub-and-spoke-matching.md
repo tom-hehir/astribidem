@@ -89,7 +89,7 @@ links.
 ## Memory and execution
 
 All matching runs in memory. Spatial links execute sequentially; `workers`
-controls queries within each link. The full anchor's spatial kernel and dedupe
+controls queries within each link. The full anchor's spatial tree and dedupe
 result are prepared once per call and reused across spatial links. Each spoke's
-kernel is released after its candidate edges are built, before preparing the
-next spoke. Calls do not share cached kernels.
+tree is released after its candidate edges are built, before preparing the
+next spoke. Calls do not share cached trees.

@@ -15,18 +15,19 @@ supported alpha interface.
 | --- | --- |
 | Match positions | `crossmatch` with a mapping of names to `(ra, dec)` tuples |
 | Choose association policy | `DegenerateCrossmatchConfig`, `EntitywiseCrossmatchConfig`, `EntitySelectionConfig`, `CrossmatchModeConfig` |
-| Apply a pair policy to candidate pairs you found yourself | `one_to_one_pairs` (with `CatalogKernel.all_pairs`) |
+| Apply a pair policy to candidate pairs you found yourself | `one_to_one_pairs` (with `SkyPositionTree.all_pairs`) |
 | Match shared identifiers | `match_uids`, `match_hub_and_spoke`, `UIDLink`, `SpatialLink` |
 | Use results | `rows_to_ids`, `ids_to_rows`, `index_summary` |
 | Reuse candidate searches | `build_edges`, `resolve`, `audit_edges`, `CandidateEdges`, `PairEdges`, `DedupeOutcome` |
 | Audit candidate edges and sweep settings | `astribidem.audit`: `audit_edges` and its result dataclasses, `restrict_radius`, `build_edges_with_duplicates`, `deduplicate`; the `astribidem` command |
 | Save candidate searches | `write_edges`, `read_edges`, `read_edges_metadata`, `build_edges_to_directory` |
+| Build from trees you built or saved | `SkyPositionTree` (`save`, `load`), `build_edges_from_trees`, `build_edges_from_trees_to_directory` |
 | Build and resolve catalogues larger than memory | `write_band_layout`, `as_chunks`, `build_edges_by_band`, `resolve_to_file` |
 | Coordinate separate workers | `prepare_band_build`, `build_band`, `sweep_boundaries`, `read_segment`, `segment_names` |
-| Query the geometric kernel | `CatalogKernel` |
+| Search sky positions directly | `SkyPositionTree` |
 | Inspect the installed release | `__version__` |
 
-The worker/segment and kernel interfaces are advanced and may evolve during
+The worker/segment and tree interfaces are advanced and may evolve during
 alpha. Use the high-level functions unless you need their explicit controls.
 Other module helpers,
 underscore-prefixed names and intermediate files are implementation details.
@@ -53,14 +54,14 @@ sets its matching radius. It takes the same `(ra, dec)` mapping as `crossmatch`
 for spatial participants, and the same mapping of names to identifier arrays as
 `match_uids` for UID participants.
 
-Every matching call is self-contained. RA/Dec becomes XYZ at kernel
+Every matching call is self-contained. RA/Dec becomes XYZ at tree
 construction, once per survey in an in-memory build or once per loaded region
-in a banded build. Ordinary builds share each kernel across deduplication and
+in a banded build. Ordinary builds share each tree across deduplication and
 all its pairs. Mixed builds reuse the hub and prepare one spatial spoke at a
-time. Input arrays are not mutated, and no kernels are retained across calls.
+time. Input arrays are not mutated, and no trees are retained across calls.
 The in-memory entry points drop their input references after preparation;
-arrays still referenced by the caller remain allocated. Kernels retain XYZ
-and the tree, whose coordinate buffer shares the XYZ allocation. Resolution
+arrays still referenced by the caller remain allocated. A tree retains XYZ
+and its cKDTree, whose coordinate buffer shares the XYZ allocation. Resolution
 uses row indices and separations and retains no coordinates or trees.
 
 ## Rows and ordering
