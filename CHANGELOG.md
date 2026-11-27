@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.0a3 — 2026-11-27
 
 - `EntitywiseCrossmatchConfig` takes an optional `surveys` list, and
   `DegenerateCrossmatchConfig.surveys` becomes optional. `resolve` reads only
