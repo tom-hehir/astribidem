@@ -93,6 +93,12 @@ Those alternatives encode additional assumptions and can change membership.
 singletons. Apply `EntitySelectionConfig` after resolution to select required
 survey combinations. Selection does not hide ambiguity from other surveys.
 
+`surveys` sets which surveys take part in resolution, as for a degenerate join;
+without it, every survey in the edges does. A survey's rows can change which
+entities form even if no selected entity contains it, so list exactly the
+surveys that should be resolved together. See
+[which surveys a mode covers](candidate-edges.md#which-surveys-a-mode-covers).
+
 ## Shared identifiers
 
 Use [`match_uids`](uid-matching.md) only when keys refer to the same namespace

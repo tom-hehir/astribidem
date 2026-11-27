@@ -1,12 +1,17 @@
 """Modes: how candidate edges become one index.
 
 A degenerate crossmatch (``DegenerateCrossmatchConfig``) is an inner join of
-a declared list of surveys under one pairwise policy. "Degenerate" is meant in
+its surveys under one pairwise policy. "Degenerate" is meant in
 the physics sense of non-unique: a row may belong to groups in several
 products (the {A, B}, {A, C} and {A, B, C} joins at once), and the mode does
 not resolve that. An entitywise crossmatch (``EntitywiseCrossmatchConfig``)
 assigns every row of every survey to exactly one entity, with nulls for
 absent surveys and disputed rows handled as configured.
+
+Both modes take an optional ``surveys`` list: the surveys the index covers, in
+column order. ``resolve`` reads only those surveys and the pairs among them, so
+the index equals one built from those surveys alone, even when the edges cover
+more. ``None`` covers every survey in the edges, in their order.
 
 Index columns hold row positions (``<survey>/row_index``): row ``i`` of a
 survey is the ``i``-th coordinate passed in. Each index records its mode in
@@ -54,16 +59,15 @@ _REASON_DEDUPE = "dedupe_disputed"
 class CrossmatchModeConfig(ABC):
     """A mode selection; instantiated from the ``mode:`` class_path block."""
 
-    @abstractmethod
-    def required_surveys(self) -> tuple[str, ...]: ...
-
-    @abstractmethod
-    def requires_all_surveys(self) -> bool:
-        """Entity semantics depend on every configured survey; joins do not."""
+    surveys: list[str] | None
+    """The surveys the index covers, in column order; ``None`` covers every
+    survey in the edges."""
 
     @abstractmethod
     def build(self, edges: CandidateEdges) -> pa.Table:
-        """The index, with its summary in ``astribidem.summary`` metadata."""
+        """The index over every survey in ``edges``, with its summary in
+        ``astribidem.summary`` metadata. ``resolve`` first selects the mode's
+        surveys, so ``edges`` holds exactly them."""
 
 
 def _with_summary(table: pa.Table, summary: dict[str, Any]) -> pa.Table:
@@ -184,9 +188,16 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
     mode does not resolve that (it reasons only within the declared subset,
     per its policy, and permits the same row to recur across products). The
     entitywise mode lifts this degeneracy into an exactly-once assignment.
+
+    Attributes:
+        surveys: the surveys joined, in column order; index rows follow the
+            first survey's rows. Only the pairs among them are read, so other
+            surveys in the edges cannot change the index. ``None`` joins every
+            survey in the edges.
+        policy: how each pair's candidate edges become one-to-one matches.
     """
 
-    surveys: list[str]
+    surveys: list[str] | None = None
     policy: SubsetJoinPolicy = "mutual_nearest"
 
     def __post_init__(self) -> None:
@@ -195,50 +206,50 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
                 f"unknown policy {self.policy!r}; supported: "
                 f"{list(SUBSET_JOIN_POLICIES)}"
             )
-        if self.policy.startswith("anchored_") and len(self.surveys) != 2:
+        if self.surveys is not None:
+            self._check_survey_count(len(self.surveys))
+
+    def _check_survey_count(self, n_surveys: int) -> None:
+        if self.policy.startswith("anchored_") and n_surveys != 2:
             raise ValueError(
                 f"{self.policy} is a two-survey policy; got "
-                f"{len(self.surveys)} surveys. Use a mutual policy for larger "
+                f"{n_surveys} surveys. Use a mutual policy for larger "
                 "subsets."
             )
 
-    def required_surveys(self) -> tuple[str, ...]:
-        return tuple(self.surveys)
-
-    def requires_all_surveys(self) -> bool:
-        return False
-
     def build(self, edges: CandidateEdges) -> pa.Table:
+        surveys = edges.survey_names
+        self._check_survey_count(len(surveys))
         matched: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
-        for a, b in combinations(self.surveys, 2):
+        for a, b in combinations(surveys, 2):
             row_a, row_b, sep = edges.oriented_edges(a, b)
             matched[(a, b)] = one_to_one_pairs(row_a, row_b, sep, self.policy)
 
-        anchor = self.surveys[0]
+        anchor = surveys[0]
         rows: dict[str, np.ndarray] = {}
-        base_a, base_b, _ = matched[(anchor, self.surveys[1])]
+        base_a, base_b, _ = matched[(anchor, surveys[1])]
         rows[anchor] = base_a
-        rows[self.surveys[1]] = base_b
+        rows[surveys[1]] = base_b
 
         # Attach each further survey through its pair with the anchor, then
         # demand every remaining pairwise relation agrees (all-pairs within
         # the subset).
-        for name in self.surveys[2:]:
+        for name in surveys[2:]:
             ka, va, _ = matched[(anchor, name)]
             partner = _sorted_lookup(ka, va, rows[anchor])
             keep = partner >= 0
             rows = {s: r[keep] for s, r in rows.items()}
             rows[name] = partner[keep]
-        for i, a in enumerate(self.surveys[1:], start=1):
-            for b in self.surveys[i + 1 :]:
+        for i, a in enumerate(surveys[1:], start=1):
+            for b in surveys[i + 1 :]:
                 ka, va, _ = matched[(a, b)]
                 keep = _sorted_lookup(ka, va, rows[a]) == rows[b]
                 rows = {s: r[keep] for s, r in rows.items()}
 
         columns: dict[str, pa.Array] = {
-            row_column(name): _row_array(rows[name]) for name in self.surveys
+            row_column(name): _row_array(rows[name]) for name in surveys
         }
-        for a, b in combinations(self.surveys, 2):
+        for a, b in combinations(surveys, 2):
             ka, va, sep = matched[(a, b)]
             # Look the group's a-row up in the pair's matched table to recover
             # the separation column (anchored policies can repeat b-rows, so
@@ -254,16 +265,16 @@ class DegenerateCrossmatchConfig(CrossmatchModeConfig):
         n_groups = len(rows[anchor])
         metadata = {
             b"astribidem.match_index.mode": b"degenerate",
-            b"astribidem.match_index.surveys": encode_metadata(list(self.surveys)),
+            b"astribidem.match_index.surveys": encode_metadata(list(surveys)),
             b"astribidem.match_index.match_policy": self.policy.encode(),
             b"astribidem.match_index.pair_radius_arcsec": encode_metadata(
-                edges.radius_metadata(combinations(self.surveys, 2))
+                edges.radius_metadata(combinations(surveys, 2))
             ),
         }
         table = pa.table(columns).replace_schema_metadata(metadata)
         summary = {
             "mode": "degenerate",
-            "surveys": list(self.surveys),
+            "surveys": list(surveys),
             "policy": self.policy,
             "n_groups": n_groups,
         }
@@ -421,6 +432,14 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
     entities. The resolver decides the ambiguous ones.
 
     Attributes:
+        surveys: the surveys resolved into entities, in column order. Every
+            listed survey takes part in resolution: its rows can join
+            components or make them ambiguous, so adding a survey can change
+            which entities form. Only the pairs among them are read, so the
+            index equals one built from these surveys alone, even when the
+            edges cover more. ``None`` resolves every survey in the edges.
+            To resolve several surveys but keep only some memberships, list
+            them all here and filter with ``selection``.
         resolver: ``refuse`` (the default) dissolves ambiguous components into
             flagged singletons; ``sequential`` attaches rows survey by survey
             in ``priority`` order; ``split`` groups rows greedily by complete
@@ -429,13 +448,15 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
         disputed: ``singleton`` keeps flagged rows (dissolved-component members
             and dedupe-disputed rows) as one-row entities; ``drop`` removes them.
         priority: the survey order that decides contested attachments; only
-            for the ``sequential`` resolver, and it must name every survey.
+            for the ``sequential`` resolver, and it must name every resolved
+            survey.
         size_cap: the largest component ``sequential`` or ``split`` resolves.
         selection: keeps only entities with the required survey membership,
-            applied after resolution; omitted surveys still take part in
-            dispute detection.
+            applied after resolution; surveys it does not require still take
+            part in dispute detection.
     """
 
+    surveys: list[str] | None = None
     resolver: str = "refuse"
     disputed: str = "singleton"
     priority: list[str] | None = None
@@ -458,12 +479,6 @@ class EntitywiseCrossmatchConfig(CrossmatchModeConfig):
                 f"'priority' applies only to the 'sequential' resolver, not "
                 f"{self.resolver!r}"
             )
-
-    def required_surveys(self) -> tuple[str, ...]:
-        return ()
-
-    def requires_all_surveys(self) -> bool:
-        return True
 
     def _priority_rank(self, names: tuple[str, ...]) -> dict[int, int]:
         priority = self.priority or []

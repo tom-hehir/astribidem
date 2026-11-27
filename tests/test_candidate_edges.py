@@ -116,17 +116,72 @@ def test_streamed_build_writes_the_same_edges(tmp_path, workers, chunk_rows):
     assert_same_edges(read_edges(tmp_path), build_edges(SURVEYS, **SETTINGS))
 
 
-def test_restricted_pairs_serve_only_degenerate_modes_over_them():
+def test_restricted_pairs_serve_only_modes_over_them():
     edges = build_edges(SURVEYS, pairs=[("b", "a")], **SETTINGS)
     assert list(edges.pairs) == [frozenset({"a", "b"})]
     degenerate = DegenerateCrossmatchConfig(surveys=["a", "b"])
     assert resolve(edges, degenerate)["a/row_index"].to_pylist() == [0, 6]
+    entitywise = EntitywiseCrossmatchConfig(surveys=["a", "b"])
+    assert resolve(edges, entitywise).column_names[:2] == ["a/row_index", "b/row_index"]
     with pytest.raises(ValueError, match="without survey pairs"):
         resolve(edges, EntitywiseCrossmatchConfig())
     with pytest.raises(ValueError, match="without survey pairs"):
         resolve(edges, DegenerateCrossmatchConfig(surveys=["a", "c"]))
     with pytest.raises(ValueError, match="unknown surveys"):
         resolve(edges, DegenerateCrossmatchConfig(surveys=["a", "z"]))
+
+
+# SURVEYS and SETTINGS without survey c.
+SURVEYS_AB = {name: SURVEYS[name] for name in ("a", "b")}
+SETTINGS_AB = {
+    "radius_arcsec": 1.0,
+    "dedupe_radius_arcsec": 0.0,
+    "dedupe_radius_arcsec_overrides": {"a": 0.5, "b": 0.0},
+}
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        EntitywiseCrossmatchConfig(surveys=["a", "b"]),
+        EntitywiseCrossmatchConfig(surveys=["b", "a"], resolver="split"),
+        DegenerateCrossmatchConfig(surveys=["b", "a"]),
+    ],
+)
+def test_a_mode_over_some_surveys_equals_a_build_over_them_alone(mode):
+    # Naming the surveys leaves c out, as if it had never been built.
+    full = build_edges(SURVEYS, **SETTINGS)
+    alone = build_edges(SURVEYS_AB, **SETTINGS_AB)
+    assert resolve(full, mode).equals(resolve(alone, mode), check_metadata=True)
+    assert crossmatch(SURVEYS, mode=mode, **SETTINGS).equals(
+        resolve(alone, mode), check_metadata=True
+    )
+
+
+@pytest.mark.parametrize(
+    "mode_class", [EntitywiseCrossmatchConfig, DegenerateCrossmatchConfig]
+)
+def test_a_mode_without_surveys_covers_every_survey_in_the_edges(mode_class):
+    edges = build_edges(SURVEYS, **SETTINGS)
+    every = resolve(edges, mode_class())
+    assert every.equals(resolve(edges, mode_class(surveys=["a", "b", "c"])))
+
+
+def test_an_anchored_policy_without_surveys_needs_two_surveys_in_the_edges():
+    mode = DegenerateCrossmatchConfig(policy="anchored_nearest")
+    assert resolve(build_edges(SURVEYS_AB, **SETTINGS_AB), mode).num_rows == 2
+    with pytest.raises(ValueError, match="two-survey policy"):
+        resolve(build_edges(SURVEYS, **SETTINGS), mode)
+
+
+def test_read_edges_reads_only_the_named_surveys(tmp_path):
+    write_edges(build_edges(SURVEYS, **SETTINGS), tmp_path)
+    selected = read_edges(tmp_path, surveys=["c", "a"])
+    assert selected.survey_names == ("c", "a")
+    assert list(selected.pairs) == [frozenset({"a", "c"})]
+    assert_same_edges(selected, read_edges(tmp_path).select_surveys(["c", "a"]))
+    with pytest.raises(ValueError, match="no surveys"):
+        read_edges(tmp_path, surveys=["a", "z"])
 
 
 @pytest.mark.parametrize("pairs", [[("a", "z")], [("a", "a")], ["ab"]])

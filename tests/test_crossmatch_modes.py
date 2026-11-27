@@ -9,6 +9,7 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
+from astribidem.api import resolve
 from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
 from astribidem.index_table import index_summary
 from astribidem.modes import (
@@ -265,6 +266,25 @@ def test_entitywise_selection_filters_after_resolution():
         EntitywiseCrossmatchConfig(
             selection=EntitySelectionConfig(must_include_surveys=["nope"])
         ).build(inputs)
+
+
+def test_entitywise_resolves_only_its_surveys():
+    # a0-b0 is clean on its own; two c rows matching both make it ambiguous.
+    inputs = _inputs(
+        {"a": 1, "b": 1, "c": 2},
+        {
+            ("a", "b"): ([0], [0], [0.1]),
+            ("a", "c"): ([0, 0], [0, 1], [0.2, 0.3]),
+            ("b", "c"): ([0, 0], [0, 1], [0.2, 0.3]),
+        },
+    )
+    every = resolve(inputs, EntitywiseCrossmatchConfig())
+    assert set(every.column("disputed_reason").to_pylist()) == {"ambiguous_component"}
+    ab = resolve(inputs, EntitywiseCrossmatchConfig(surveys=["a", "b"]))
+    assert ab.column_names == ["a/row_index", "b/row_index", "disputed_reason"]
+    assert ab.column("a/row_index").to_pylist() == [0]
+    assert ab.column("b/row_index").to_pylist() == [0]
+    assert ab.column("disputed_reason").to_pylist() == [None]
 
 
 def test_entitywise_absent_surveys_are_null_rows():

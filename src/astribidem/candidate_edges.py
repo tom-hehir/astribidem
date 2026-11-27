@@ -14,7 +14,9 @@ covering some rows. Row numbers are global in every segment.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import combinations
 from typing import Any
 
 import numpy as np
@@ -86,7 +88,8 @@ class CandidateEdges:
     """One segment: dedupe outcomes for each survey plus each built pair's edges.
 
     ``pairs`` holds every survey pair unless the build was restricted to some
-    pairs, in which case only degenerate modes over those pairs can use it.
+    pairs, in which case only modes whose surveys' pairs were all built can use
+    it.
     """
 
     surveys: tuple[DedupeOutcome, ...]
@@ -101,6 +104,18 @@ class CandidateEdges:
             if survey.name == name:
                 return survey
         raise KeyError(name)
+
+    def select_surveys(self, names: Sequence[str]) -> CandidateEdges:
+        """These surveys, in this order, and the built pairs among them.
+
+        A survey's dedupe outcome and a pair's edges depend only on that survey
+        or pair, so the result equals the same build over these surveys alone.
+        """
+        wanted = {frozenset(pair) for pair in combinations(names, 2)}
+        return CandidateEdges(
+            surveys=tuple(self.survey(name) for name in names),
+            pairs={key: pair for key, pair in self.pairs.items() if key in wanted},
+        )
 
     def oriented_edges(
         self, first: str, second: str

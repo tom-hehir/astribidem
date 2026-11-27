@@ -175,15 +175,43 @@ def write_edges(edges: CandidateEdges, directory: str | Path) -> None:
     )
 
 
-def read_segment(directory: str | Path, name: str) -> CandidateEdges:
-    """Load one saved segment."""
+def _selected_metadata(metadata: dict, surveys: Sequence[str] | None) -> dict:
+    """``metadata`` with only these surveys, in this order, and pairs among them."""
+    if surveys is None:
+        return metadata
+    entries = {entry["name"]: entry for entry in metadata["surveys"]}
+    unknown = [name for name in surveys if name not in entries]
+    if unknown:
+        raise ValueError(
+            f"the edges have no surveys {unknown}; surveys: {list(entries)}"
+        )
+    wanted = set(surveys)
+    return {
+        **metadata,
+        "surveys": [entries[name] for name in surveys],
+        "pairs": [
+            entry for entry in metadata["pairs"] if set(entry["surveys"]) <= wanted
+        ],
+    }
+
+
+def read_segment(
+    directory: str | Path, name: str, surveys: Sequence[str] | None = None
+) -> CandidateEdges:
+    """Load one saved segment, or only some surveys and the pairs among them.
+
+    ``surveys`` reads only those surveys, in that order, and the saved pairs
+    among them, equal to ``read_segment(directory, name).select_surveys(surveys)``.
+    ``None`` reads every survey.
+    """
     directory = Path(directory)
     metadata = read_edges_metadata(directory)
     if name not in metadata["segments"]:
         raise ValueError(f"no segment {name!r}; segments: {metadata['segments']}")
+    metadata = _selected_metadata(metadata, surveys)
     segment = directory / name
     has_rows = (segment / "rows").is_dir()
-    surveys = []
+    outcomes = []
     for entry in metadata["surveys"]:
         table = pq.read_table(
             _dedupe_file(segment, entry["name"]),
@@ -191,7 +219,7 @@ def read_segment(directory: str | Path, name: str) -> CandidateEdges:
         )
         rows = table["row"].to_numpy()
         dropped = table["status"].to_numpy(zero_copy_only=False) == _DROPPED
-        surveys.append(
+        outcomes.append(
             DedupeOutcome(
                 name=entry["name"],
                 n_rows=entry["n_rows"],
@@ -218,7 +246,7 @@ def read_segment(directory: str | Path, name: str) -> CandidateEdges:
             row_b=table["row_b"].to_numpy(),
             separation_arcsec=table["separation_arcsec"].to_numpy(),
         )
-    return CandidateEdges(surveys=tuple(surveys), pairs=pairs)
+    return CandidateEdges(surveys=tuple(outcomes), pairs=pairs)
 
 
 def segment_names(directory: str | Path) -> list[str]:
@@ -226,18 +254,22 @@ def segment_names(directory: str | Path) -> list[str]:
     return list(read_edges_metadata(directory)["segments"])
 
 
-def read_edges(directory: str | Path) -> CandidateEdges:
+def read_edges(
+    directory: str | Path, surveys: Sequence[str] | None = None
+) -> CandidateEdges:
     """Reload saved candidate edges as one segment covering all of their rows.
 
     Every segment is loaded and combined, so this suits edges that fit in
     memory; use ``read_segment`` to process large builds one segment at a time.
-    A build from catalogues with no rows has no segments and reloads as edges
-    covering no rows.
+    ``surveys`` reads only those surveys, in that order, and the saved pairs
+    among them, so a mode over a few surveys need not load edges saved for
+    many; ``None`` reads every survey. A build from catalogues with no rows has
+    no segments and reloads as edges covering no rows.
     """
     names = segment_names(directory)
     if not names:
-        return _empty_edges(read_edges_metadata(directory))
-    return combine_segments([read_segment(directory, name) for name in names])
+        return _empty_edges(_selected_metadata(read_edges_metadata(directory), surveys))
+    return combine_segments([read_segment(directory, name, surveys) for name in names])
 
 
 def _empty_edges(metadata: dict) -> CandidateEdges:
