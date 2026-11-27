@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 
 from astribidem import (
-    CatalogKernel,
     EntitywiseCrossmatchConfig,
+    SkyPositionTree,
     build_edges,
     build_edges_by_band,
     build_edges_to_directory,
@@ -18,7 +18,7 @@ from astribidem import (
     resolve,
     write_band_layout,
 )
-from astribidem import kernel as kernel_module
+from astribidem import sky_position_tree as tree_module
 
 
 def coordinates(offsets):
@@ -122,14 +122,14 @@ def test_temporary_inputs_are_released_before_spatial_queries(
         return surveys
 
     queried = []
-    original = CatalogKernel.self_pairs
+    original = SkyPositionTree.self_pairs
 
-    def self_pairs(kernel, radius):
+    def self_pairs(tree, radius):
         assert all(ref() is None for ref in refs)
         queried.append(1)
-        return original(kernel, radius)
+        return original(tree, radius)
 
-    monkeypatch.setattr(CatalogKernel, "self_pairs", self_pairs)
+    monkeypatch.setattr(SkyPositionTree, "self_pairs", self_pairs)
     # Explicit keywords leave ownership with the callee. Python 3.11 keeps
     # an extra caller-side argument tuple alive when forwarding **kwargs.
     if route == "crossmatch":
@@ -151,25 +151,25 @@ def test_temporary_inputs_are_released_before_spatial_queries(
     assert len(queried) == 2
 
 
-def test_each_call_prepares_each_survey_once_and_retains_no_kernels(monkeypatch):
+def test_each_call_prepares_each_survey_once_and_retains_no_trees(monkeypatch):
     original_init, original_conversion = (
-        CatalogKernel.__init__,
-        kernel_module.radec_to_xyz,
+        SkyPositionTree.__init__,
+        tree_module.radec_to_xyz,
     )
-    kernels, conversions = [], []
+    trees, conversions = [], []
 
-    def initialize(kernel, *args, **kwargs):
-        original_init(kernel, *args, **kwargs)
-        assert kernel.xyz.dtype == np.float64
-        assert np.shares_memory(kernel.xyz, kernel.tree.data)
-        kernels.append(weakref.ref(kernel))
+    def initialize(tree, *args, **kwargs):
+        original_init(tree, *args, **kwargs)
+        assert tree.xyz.dtype == np.float64
+        assert np.shares_memory(tree.xyz, tree.tree.data)
+        trees.append(weakref.ref(tree))
 
     def convert(*args, **kwargs):
         conversions.append(kwargs.get("name"))
         return original_conversion(*args, **kwargs)
 
-    monkeypatch.setattr(CatalogKernel, "__init__", initialize)
-    monkeypatch.setattr(kernel_module, "radec_to_xyz", convert)
+    monkeypatch.setattr(SkyPositionTree, "__init__", initialize)
+    monkeypatch.setattr(tree_module, "radec_to_xyz", convert)
     surveys = {n: coordinates([0, 0.1]) for n in ("a", "b", "c")}
     for _ in range(2):
         crossmatch(
@@ -178,6 +178,6 @@ def test_each_call_prepares_each_survey_once_and_retains_no_kernels(monkeypatch)
             dedupe_radius_arcsec=0.2,
             mode=EntitywiseCrossmatchConfig(),
         )
-        assert all(ref() is None for ref in kernels)
+        assert all(ref() is None for ref in trees)
     assert conversions == ["a", "b", "c", "a", "b", "c"]
-    assert len(kernels) == 6
+    assert len(trees) == 6

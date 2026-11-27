@@ -1,12 +1,14 @@
-"""Kernel contract tests against a brute-force O(n^2) oracle."""
+"""SkyPositionTree contract tests against a brute-force O(n^2) oracle."""
 
 from __future__ import annotations
+
+import pickle
 
 import numpy as np
 import pytest
 
-from astribidem.kernel import (
-    CatalogKernel,
+from astribidem.sky_position_tree import (
+    SkyPositionTree,
     arcsec_to_chord,
     chord_to_arcsec,
     radec_to_xyz,
@@ -33,8 +35,8 @@ def test_all_pairs_matches_brute_force(radius):
     rng = np.random.default_rng(7)
     ra_a, dec_a = _random_patch(rng, 400)
     ra_b, dec_b = _random_patch(rng, 300)
-    a = CatalogKernel(ra_a, dec_a)
-    b = CatalogKernel(ra_b, dec_b)
+    a = SkyPositionTree(ra_a, dec_a)
+    b = SkyPositionTree(ra_b, dec_b)
 
     i, j, sep = a.all_pairs(b, radius)
     oi, oj, osep = _brute_force_pairs(a.xyz, b.xyz, radius)
@@ -49,10 +51,10 @@ def test_all_pairs_matches_brute_force(radius):
 def test_self_pairs_matches_brute_force():
     rng = np.random.default_rng(11)
     ra, dec = _random_patch(rng, 500, span=0.01)
-    kernel = CatalogKernel(ra, dec)
+    tree = SkyPositionTree(ra, dec)
 
-    i, j, sep = kernel.self_pairs(2.0)
-    oi, oj, osep = _brute_force_pairs(kernel.xyz, kernel.xyz, 2.0)
+    i, j, sep = tree.self_pairs(2.0)
+    oi, oj, osep = _brute_force_pairs(tree.xyz, tree.xyz, 2.0)
     keep = oi < oj  # oracle emits both directions and identity pairs
     np.testing.assert_array_equal(i, oi[keep])
     np.testing.assert_array_equal(j, oj[keep])
@@ -63,7 +65,7 @@ def test_self_pairs_matches_brute_force():
 def test_self_pairs_includes_exact_duplicates():
     ra = np.array([10.0, 10.0, 11.0])
     dec = np.array([0.0, 0.0, 0.0])
-    i, j, sep = CatalogKernel(ra, dec).self_pairs(0.5)
+    i, j, sep = SkyPositionTree(ra, dec).self_pairs(0.5)
     assert i.tolist() == [0]
     assert j.tolist() == [1]
     assert sep[0] == 0.0
@@ -77,9 +79,9 @@ def test_boundary_behaviour_is_consistent_across_paths():
     ra = np.array([180.0])
     dec = np.array([0.0])
     partner_ra = np.array([180.0 + 1.0 / 3600.0])
-    a = CatalogKernel(ra, dec)
-    b = CatalogKernel(partner_ra, dec)
-    both = CatalogKernel(np.concatenate([ra, partner_ra]), np.zeros(2))
+    a = SkyPositionTree(ra, dec)
+    b = SkyPositionTree(partner_ra, dec)
+    both = SkyPositionTree(np.concatenate([ra, partner_ra]), np.zeros(2))
 
     _, _, sep = a.all_pairs(b, 2.0)
     sep0 = float(sep[0])
@@ -98,8 +100,8 @@ def test_k_truncation_matches_brute_force(k):
     rng = np.random.default_rng(3)
     ra_a, dec_a = _random_patch(rng, 200, span=0.005)
     ra_b, dec_b = _random_patch(rng, 200, span=0.005)
-    a = CatalogKernel(ra_a, dec_a)
-    b = CatalogKernel(ra_b, dec_b)
+    a = SkyPositionTree(ra_a, dec_a)
+    b = SkyPositionTree(ra_b, dec_b)
     radius = 5.0
 
     i, j, sep = a.all_pairs(b, radius, k=k)
@@ -114,8 +116,8 @@ def test_chunked_join_is_bit_identical_to_serial():
     rng = np.random.default_rng(19)
     ra_a, dec_a = _random_patch(rng, 1000)
     ra_b, dec_b = _random_patch(rng, 800)
-    a = CatalogKernel(ra_a, dec_a)
-    b = CatalogKernel(ra_b, dec_b)
+    a = SkyPositionTree(ra_a, dec_a)
+    b = SkyPositionTree(ra_b, dec_b)
 
     serial = a.all_pairs(b, 3.0)
     chunks = list(a.all_pairs_chunks(b, 3.0, workers=4, chunk_rows=137))
@@ -125,8 +127,8 @@ def test_chunked_join_is_bit_identical_to_serial():
 
 
 def test_empty_inputs():
-    empty = CatalogKernel(np.empty(0), np.empty(0))
-    other = CatalogKernel(np.array([1.0]), np.array([0.0]))
+    empty = SkyPositionTree(np.empty(0), np.empty(0))
+    other = SkyPositionTree(np.array([1.0]), np.array([0.0]))
     i, j, sep = empty.all_pairs(other, 1.0)
     assert len(i) == len(j) == len(sep) == 0
     i, j, sep = empty.self_pairs(1.0)
@@ -134,9 +136,9 @@ def test_empty_inputs():
 
 
 def test_validation_errors():
-    kernel = CatalogKernel(np.array([1.0]), np.array([0.0]))
+    tree = SkyPositionTree(np.array([1.0]), np.array([0.0]))
     with pytest.raises(ValueError, match="k must be >= 1"):
-        kernel.all_pairs(kernel, 1.0, k=0)
+        tree.all_pairs(tree, 1.0, k=0)
     with pytest.raises(ValueError, match="workers"):
         resolve_workers(0)
 
@@ -150,6 +152,32 @@ def test_radec_chord_roundtrip():
 
 @pytest.mark.parametrize("radius", [0.0, -1.0, float("nan")])
 def test_all_pairs_refuses_a_radius_that_is_not_positive_and_finite(radius):
-    kernel = CatalogKernel(np.array([10.0]), np.array([0.0]))
+    tree = SkyPositionTree(np.array([10.0]), np.array([0.0]))
     with pytest.raises(ValueError, match="positive number of arcseconds"):
-        kernel.all_pairs(kernel, radius)
+        tree.all_pairs(tree, radius)
+
+
+def test_a_saved_tree_loads_with_the_same_queries_and_one_coordinate_buffer(tmp_path):
+    rng = np.random.default_rng(3)
+    original = SkyPositionTree(*_random_patch(rng, 500))
+    partner = SkyPositionTree(*_random_patch(rng, 300))
+    path = tmp_path / "tree.pkl"
+    original.save(path)
+    loaded = SkyPositionTree.load(path)
+    np.testing.assert_array_equal(loaded.xyz, original.xyz)
+    # Like a freshly built tree, the loaded one keeps its vectors once.
+    assert np.shares_memory(loaded.xyz, loaded.tree.data)
+    for found, expected in (
+        (loaded.self_pairs(20.0), original.self_pairs(20.0)),
+        (loaded.all_pairs(partner, 20.0), original.all_pairs(partner, 20.0)),
+        (partner.all_pairs(loaded, 20.0), partner.all_pairs(original, 20.0)),
+    ):
+        for x, y in zip(found, expected, strict=True):
+            np.testing.assert_array_equal(x, y)
+
+
+def test_loading_something_other_than_a_tree_is_refused(tmp_path):
+    path = tmp_path / "not-a-tree.pkl"
+    path.write_bytes(pickle.dumps({"xyz": None}))
+    with pytest.raises(TypeError, match="not a SkyPositionTree"):
+        SkyPositionTree.load(path)

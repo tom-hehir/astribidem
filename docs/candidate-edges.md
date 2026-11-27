@@ -132,10 +132,43 @@ edge memory is the limit. Very small chunks can slow the build.
 
 Streaming bounds only the edges. Every survey's XYZ, KD-tree and dedupe
 results stay in memory for the build. Caller-retained RA/Dec arrays also
-consume memory; the library drops its input references after preparing kernels.
+consume memory; the library drops its input references after preparing trees.
 Float64 XYZ occupies 24 bytes per row, in addition to tree structures,
 dedupe state, candidate buffers and conversion temporaries.
 Resolution later loads all edges of the surveys it uses, but no coordinates.
+
+## Build from trees
+
+Each survey's positions are matched through a `SkyPositionTree`: its unit
+vectors and a KD-tree over them, 40 to 50 bytes per row. The builders above
+make one per survey from the coordinates. `build_edges_from_trees` and
+`build_edges_from_trees_to_directory` take the trees instead, as a mapping of
+survey names to trees, and otherwise match `build_edges` and
+`build_edges_to_directory` exactly.
+
+Building a tree costs much more than loading a saved one, so trees you will
+use again can be saved once and loaded when needed:
+
+```python
+from astribidem import SkyPositionTree, build_edges_from_trees_to_directory
+
+for name, (ra, dec) in surveys.items():
+    SkyPositionTree(ra, dec, name=name).save(f"trees/{name}.pkl")
+trees = {name: SkyPositionTree.load(f"trees/{name}.pkl") for name in surveys}
+build_edges_from_trees_to_directory(
+    trees, "edges-directory", radius_arcsec=1.0, dedupe_radius_arcsec=0.0
+)
+```
+
+A saved tree is a pickle, so load only files you saved yourself.
+
+The trees are read from the mapping in a fixed order: each tree once for
+dedupe, then the pairs grouped by their first survey, with at most two trees
+held at a time. A mapping that loads a tree each time it is read therefore
+keeps only two trees in memory, when every survey's tree would not fit at
+once; each first survey's tree is loaded once per group of pairs and each
+second survey's once per pair. Only the dedupe results, about one byte per
+row, stay in memory throughout.
 
 ## Build edges band by band
 

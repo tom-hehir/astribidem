@@ -22,8 +22,12 @@ from astribidem.index_table import (
     encode_metadata,
     row_column,
 )
-from astribidem.kernel import CatalogKernel, check_match_radius, resolve_workers
 from astribidem.modes import DegenerateCrossmatchConfig, SubsetJoinPolicy
+from astribidem.sky_position_tree import (
+    SkyPositionTree,
+    check_match_radius,
+    resolve_workers,
+)
 from astribidem.uids import match_uids
 
 
@@ -111,9 +115,9 @@ def match_hub_and_spoke(
     # The full anchor is prepared once for this invocation. Every spatial
     # spoke reuses its tree and dedupe verdict, including after an empty link.
     if spatial:
-        hub_kernel = CatalogKernel(*coordinates[anchor], name=anchor)
-        hub_outcome, hub_active = dedupe_survey(anchor, radii[anchor], hub_kernel)
-        n_anchor = len(hub_kernel)
+        hub_tree = SkyPositionTree(*coordinates[anchor], name=anchor)
+        hub_outcome, hub_active = dedupe_survey(anchor, radii[anchor], hub_tree)
+        n_anchor = len(hub_tree)
     else:
         n_anchor = len(uids[anchor])
 
@@ -132,19 +136,19 @@ def match_hub_and_spoke(
                 ),
             }
         else:
-            spoke_kernel = CatalogKernel(*coordinates[name], name=name)
-            spoke_outcome, spoke_active = dedupe_survey(name, radii[name], spoke_kernel)
+            spoke_tree = SkyPositionTree(*coordinates[name], name=name)
+            spoke_outcome, spoke_active = dedupe_survey(name, radii[name], spoke_tree)
             edge = build_pair_edges(
                 anchor,
                 name,
                 hub_active,
                 spoke_active,
                 link.radius_arcsec,
-                kernel_a=hub_kernel,
-                kernel_b=spoke_kernel,
+                tree_a=hub_tree,
+                tree_b=spoke_tree,
                 workers=workers,
             )
-            del spoke_kernel, spoke_active
+            del spoke_tree, spoke_active
             pair = resolve(
                 CandidateEdges(
                     surveys=(hub_outcome, spoke_outcome),
@@ -177,7 +181,7 @@ def match_hub_and_spoke(
         del pair, pair_rows, positions, keep
 
     if spatial:
-        del hub_kernel, hub_outcome, hub_active
+        del hub_tree, hub_outcome, hub_active
 
     configuration = {
         "method": "hub_and_spoke",

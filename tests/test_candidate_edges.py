@@ -1,23 +1,27 @@
 """Candidate edges: building, resolving, saving, reloading and streaming."""
 
 import json
+import weakref
+from collections.abc import Mapping
 
 import numpy as np
 import pyarrow.parquet as pq
 import pytest
 
 from astribidem import (
-    CatalogKernel,
     DegenerateCrossmatchConfig,
     EntitywiseCrossmatchConfig,
+    SkyPositionTree,
     build_edges,
+    build_edges_from_trees,
+    build_edges_from_trees_to_directory,
     build_edges_to_directory,
     crossmatch,
     read_edges,
     resolve,
     write_edges,
 )
-from astribidem import kernel as kernel_module
+from astribidem import sky_position_tree as tree_module
 
 
 def survey(offsets_arcsec):
@@ -116,6 +120,68 @@ def test_streamed_build_writes_the_same_edges(tmp_path, workers, chunk_rows):
     assert_same_edges(read_edges(tmp_path), build_edges(SURVEYS, **SETTINGS))
 
 
+class LoadingTrees(Mapping):
+    """Trees loaded from saved files each time they are read, as a cache would.
+
+    Records the order of reads and the most trees alive at once.
+    """
+
+    def __init__(self, paths):
+        self.paths = paths
+        self.reads = []
+        self.alive = weakref.WeakSet()
+        self.peak = 0
+
+    def __getitem__(self, name):
+        tree = SkyPositionTree.load(self.paths[name])
+        self.reads.append(name)
+        self.alive.add(tree)
+        self.peak = max(self.peak, len(self.alive))
+        return tree
+
+    def __iter__(self):
+        return iter(self.paths)
+
+    def __len__(self):
+        return len(self.paths)
+
+
+def saved_trees(directory):
+    paths = {}
+    for name, (ra, dec) in SURVEYS.items():
+        paths[name] = directory / f"{name}.pkl"
+        SkyPositionTree(ra, dec, name=name).save(paths[name])
+    return paths
+
+
+@pytest.mark.parametrize("pairs", [None, [("c", "a"), ("b", "c")]])
+def test_every_edge_builder_gives_the_same_edges(tmp_path, pairs):
+    settings = {**SETTINGS, "pairs": pairs}
+    expected = build_edges(SURVEYS, **settings)
+    trees = {name: SkyPositionTree(ra, dec) for name, (ra, dec) in SURVEYS.items()}
+    assert_same_edges(build_edges_from_trees(trees, **settings), expected)
+    build_edges_to_directory(SURVEYS, tmp_path / "coordinates", **settings)
+    assert_same_edges(read_edges(tmp_path / "coordinates"), expected)
+    build_edges_from_trees_to_directory(trees, tmp_path / "trees", **settings)
+    assert_same_edges(read_edges(tmp_path / "trees"), expected)
+
+
+def test_tree_builders_read_each_tree_in_order_and_hold_at_most_two(tmp_path):
+    paths = saved_trees(tmp_path)
+    expected = build_edges(SURVEYS, **SETTINGS)
+    # Each tree once for dedupe; then a with b and c, and b with c.
+    reads = ["a", "b", "c", "a", "b", "c", "b", "c"]
+
+    trees = LoadingTrees(paths)
+    assert_same_edges(build_edges_from_trees(trees, **SETTINGS), expected)
+    assert (trees.reads, trees.peak) == (reads, 2)
+
+    trees = LoadingTrees(paths)
+    build_edges_from_trees_to_directory(trees, tmp_path / "edges", **SETTINGS)
+    assert_same_edges(read_edges(tmp_path / "edges"), expected)
+    assert (trees.reads, trees.peak) == (reads, 2)
+
+
 def test_restricted_pairs_serve_only_modes_over_them():
     edges = build_edges(SURVEYS, pairs=[("b", "a")], **SETTINGS)
     assert list(edges.pairs) == [frozenset({"a", "b"})]
@@ -192,8 +258,8 @@ def test_invalid_pair_selection_is_rejected(pairs):
 
 def test_chunk_stream_concatenates_to_the_complete_join():
     rng = np.random.default_rng(0)
-    a = CatalogKernel(rng.uniform(0, 0.01, 400), rng.uniform(0, 0.01, 400))
-    b = CatalogKernel(rng.uniform(0, 0.01, 300), rng.uniform(0, 0.01, 300))
+    a = SkyPositionTree(rng.uniform(0, 0.01, 400), rng.uniform(0, 0.01, 400))
+    b = SkyPositionTree(rng.uniform(0, 0.01, 300), rng.uniform(0, 0.01, 300))
     chunks = list(a.all_pairs_chunks(b, 5.0, workers=3, chunk_rows=37))
     assert len(chunks) == 11
     joined = [np.concatenate([chunk[k] for chunk in chunks]) for k in range(3)]
@@ -203,16 +269,16 @@ def test_chunk_stream_concatenates_to_the_complete_join():
 
 def test_chunk_stream_keeps_at_most_workers_chunks_in_flight(monkeypatch):
     rng = np.random.default_rng(1)
-    a = CatalogKernel(rng.uniform(0, 0.01, 400), rng.uniform(0, 0.01, 400))
-    b = CatalogKernel(rng.uniform(0, 0.01, 300), rng.uniform(0, 0.01, 300))
+    a = SkyPositionTree(rng.uniform(0, 0.01, 400), rng.uniform(0, 0.01, 400))
+    b = SkyPositionTree(rng.uniform(0, 0.01, 300), rng.uniform(0, 0.01, 300))
     started = []
-    tree = kernel_module.cKDTree
+    tree = tree_module.cKDTree
 
     def counting_tree(*args, **kwargs):
         started.append(1)
         return tree(*args, **kwargs)
 
-    monkeypatch.setattr(kernel_module, "cKDTree", counting_tree)
+    monkeypatch.setattr(tree_module, "cKDTree", counting_tree)
     stream = a.all_pairs_chunks(b, 5.0, workers=2, chunk_rows=10)
     next(stream)
     # Two chunks submitted up front, one more when the first is handed over.

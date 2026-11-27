@@ -21,7 +21,6 @@ so a sweep resolves or audits each setting with no further searches::
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Iterable, Mapping
 
 import numpy as np
@@ -29,13 +28,13 @@ from numpy.typing import ArrayLike
 
 from astribidem.candidate_edges import CandidateEdges, DedupeOutcome, PairEdges
 from astribidem.edges import (
-    build_prepared_edges,
+    build_edges_from_trees,
     dedupe_from_pairs,
     dedupe_radius_by_survey,
-    prepare_edge_build,
+    matching_radii,
     radius_by_pair,
+    sky_position_trees,
 )
-from astribidem.kernel import resolve_workers
 
 
 def restrict_radius(
@@ -102,20 +101,20 @@ def build_edges_with_duplicates(
     that survey. Pass both to ``deduplicate`` to apply a dedupe radius up to
     the one given here. Each survey's KD-tree serves both searches.
     """
-    workers = resolve_workers(workers)
-    settings, kernels = prepare_edge_build(
-        coordinates,
+    trees = sky_position_trees(coordinates)
+    del coordinates
+    dedupe_radii, _ = matching_radii(
+        trees,
         radius_arcsec=radius_arcsec,
         dedupe_radius_arcsec=dedupe_radius_arcsec,
         dedupe_radius_arcsec_overrides=dedupe_radius_arcsec_overrides,
         radius_arcsec_overrides=radius_arcsec_overrides,
         pairs=pairs,
     )
-    del coordinates
     duplicates = {}
-    for name, radius in settings.dedupe_radius_arcsec.items():
-        if radius > 0 and len(kernels[name]):
-            first, second, separation = kernels[name].self_pairs(radius)
+    for name, radius in dedupe_radii.items():
+        if radius > 0 and len(trees[name]):
+            first, second, separation = trees[name].self_pairs(radius)
         else:
             first = second = np.empty(0, dtype=np.int64)
             separation = np.empty(0, dtype=np.float64)
@@ -127,11 +126,15 @@ def build_edges_with_duplicates(
             row_b=second,
             separation_arcsec=separation,
         )
-    undeduped = dataclasses.replace(
-        settings,
-        dedupe_radius_arcsec=dict.fromkeys(settings.survey_names, 0.0),
+    undeduped = build_edges_from_trees(
+        trees,
+        radius_arcsec=radius_arcsec,
+        dedupe_radius_arcsec=0.0,
+        radius_arcsec_overrides=radius_arcsec_overrides,
+        pairs=pairs,
+        workers=workers,
     )
-    return build_prepared_edges(undeduped, kernels, workers=workers), duplicates
+    return undeduped, duplicates
 
 
 def deduplicate(
